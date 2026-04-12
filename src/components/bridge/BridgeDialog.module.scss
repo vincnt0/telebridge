@@ -1,0 +1,18 @@
+.modal {
+  :global(.modal-dialog) {
+    max-width: 26rem;
+  }
+}
+
+.description {
+  margin: 0 0 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.error {
+  margin: 0.5rem 0 0.75rem;
+  color: var(--color-error);
+  font-size: 0.875rem;
+}

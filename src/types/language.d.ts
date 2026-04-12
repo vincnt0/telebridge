@@ -2056,6 +2056,27 @@ export interface LangPair {
   'NoForwardsRequestAccept': undefined;
   'TelebridgeDecryptingRetry': undefined;
   'TelebridgeForwardSkipped': undefined;
+  'SettingsBridge': undefined;
+  'BridgeTitle': undefined;
+  'BridgeInfoDescription': undefined;
+  'BridgeStatusNotInitialized': undefined;
+  'BridgeStatusLocked': undefined;
+  'BridgeStatusUnlocked': undefined;
+  'BridgeSetupButton': undefined;
+  'BridgeUnlockButton': undefined;
+  'BridgeLockButton': undefined;
+  'BridgeChangePasswordButton': undefined;
+  'BridgeSetupDialogTitle': undefined;
+  'BridgeSetupDialogText': undefined;
+  'BridgeUnlockDialogTitle': undefined;
+  'BridgeUnlockDialogText': undefined;
+  'BridgePasswordLabel': undefined;
+  'BridgePasswordConfirmLabel': undefined;
+  'BridgeSubmitSetup': undefined;
+  'BridgeSubmitUnlock': undefined;
+  'BridgePasswordMismatch': undefined;
+  'BridgePasswordTooShort': undefined;
+  'BridgeWrongPassword': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -4081,6 +4102,9 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
     'count': V;
   };
   'FwdMessagesToChats': {
+    'count': V;
+  };
+  'BridgeChatKeysCount': {
     'count': V;
   };
 }

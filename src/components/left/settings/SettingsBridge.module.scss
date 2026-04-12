@@ -1,0 +1,61 @@
+.header {
+  padding: 1.5rem 1rem 0.5rem;
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  background-color: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+
+.notInitialized {
+  background-color: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+
+.locked {
+  background-color: var(--color-error-shade);
+  color: var(--color-error);
+}
+
+.unlocked {
+  background-color: var(--color-primary-shade);
+  color: var(--color-primary);
+}
+
+.chatCount {
+  margin: 0 1rem 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 1.5rem;
+}

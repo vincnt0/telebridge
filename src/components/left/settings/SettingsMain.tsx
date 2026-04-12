@@ -138,6 +138,14 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           {lang('PrivacySettings')}
         </ListItem>
         <ListItem
+          icon="key"
+          narrow
+
+          onClick={() => openSettingsScreen({ screen: SettingsScreens.Bridge })}
+        >
+          {lang('SettingsBridge')}
+        </ListItem>
+        <ListItem
           icon="folder"
           narrow
 

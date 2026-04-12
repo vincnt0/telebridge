@@ -18,6 +18,7 @@ import SettingsFolders from './folders/SettingsFolders';
 import SettingsPasscode from './passcode/SettingsPasscode';
 import PrivacyMessages from './PrivacyMessages';
 import SettingsActiveSessions from './SettingsActiveSessions';
+import SettingsBridge from './SettingsBridge';
 import SettingsActiveWebsites from './SettingsActiveWebsites';
 import SettingsCustomEmoji from './SettingsCustomEmoji';
 import SettingsDataStorage from './SettingsDataStorage';
@@ -491,6 +492,14 @@ const Settings: FC<OwnProps> = ({
       case SettingsScreens.Passkeys:
         return (
           <SettingsPasskeys
+            isActive={isScreenActive}
+            onReset={handleReset}
+          />
+        );
+
+      case SettingsScreens.Bridge:
+        return (
+          <SettingsBridge
             isActive={isScreenActive}
             onReset={handleReset}
           />
