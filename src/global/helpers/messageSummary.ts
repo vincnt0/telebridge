@@ -7,6 +7,12 @@ import { ApiMessageEntityTypes } from '../../api/types';
 
 import { type LangFn } from '../../util/localization';
 import trimText from '../../util/trimText';
+import { getMessageKey } from '../../util/keys/messageKey';
+import {
+  canDecryptNow,
+  ensureDecryptedText,
+  getCachedDecryptedText,
+} from '../../telebridge/receive';
 import { renderTextWithEntities } from '../../components/common/helpers/renderTextWithEntities';
 import {
   getMessageTextWithFallback, getMessageTranscription,
@@ -38,12 +44,26 @@ export function getMessageTextWithSpoilers(
 ) {
   const transcription = getMessageTranscription(message);
 
-  const textWithoutTranscription = getMessageTextWithFallback(lang, statefulContent?.story || message)?.text;
-  if (!textWithoutTranscription) {
+  const rawText = getMessageTextWithFallback(lang, statefulContent?.story || message)?.text;
+  if (!rawText) {
     return transcription;
   }
 
-  const { entities } = message.content.text || {};
+  // Telebridge: swap in decrypted plaintext for chat-list previews. Spoilers
+  // can't survive encryption (entity offsets are dropped), so the post-swap
+  // branch below skips the spoiler loop for ciphertext.
+  let textWithoutTranscription = rawText;
+  let entities = message.content.text?.entities;
+  if (canDecryptNow(message.chatId, rawText)) {
+    const messageKey = getMessageKey(message);
+    const cached = getCachedDecryptedText(messageKey);
+    if (cached !== undefined) {
+      textWithoutTranscription = cached;
+      entities = undefined;
+    } else {
+      ensureDecryptedText(message.chatId, messageKey, rawText);
+    }
+  }
   if (!entities?.length) {
     return transcription ? `${transcription}\n${textWithoutTranscription}` : textWithoutTranscription;
   }

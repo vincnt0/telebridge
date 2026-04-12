@@ -131,6 +131,7 @@ import buildClassName from '../../../util/buildClassName';
 import buildStyle from '../../../util/buildStyle';
 import { isUserId } from '../../../util/entities/ids';
 import { getMessageKey } from '../../../util/keys/messageKey';
+import { isTelebridgeMessage } from '../../../telebridge/protocol';
 import { getServerTime } from '../../../util/serverTime';
 import stopEvent from '../../../util/stopEvent';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
@@ -335,6 +336,15 @@ type StateProps = {
   isReplyMediaNsfw?: boolean;
   summary?: TextSummary;
   canSendStickers?: boolean;
+  /**
+   * Telebridge: decrypted plaintext for this message, if any. Read purely
+   * for reactivity — the actual substitution happens inside
+   * `renderMessageText` via `getCachedDecryptedText`. When a background
+   * decrypt pushes a new entry into `global.bridge.decryptedByKey`, this
+   * selector returns a different value and Message re-renders so the
+   * helper can swap ciphertext for plaintext.
+   */
+  bridgeDecryptedText?: string;
 };
 
 type MetaPosition =
@@ -2258,6 +2268,14 @@ export default memo(withGlobal<OwnProps>(
       webPage,
       summary,
       canSendStickers: allowedAttachmentOptions.canSendStickers,
+      // Telebridge: subscribe to the decrypted-text cache entry for this
+      // message so Message re-renders when a background decrypt lands.
+      // Only populated for actually-encrypted payloads, so non-Telebridge
+      // messages never see cache-driven re-renders.
+      bridgeDecryptedText: message.content.text?.text
+        && isTelebridgeMessage(message.content.text.text)
+        ? global.bridge.decryptedByKey[getMessageKey(message)]
+        : undefined,
     };
   },
 )(Message));

@@ -349,6 +349,7 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     isInitialized: false,
     isUnlocked: false,
     chatKeyIds: {},
+    decryptedByKey: {},
   },
 };
 

@@ -3118,6 +3118,13 @@ export interface ActionPayloads {
 
   requestMessageMediaEditor: WithTabId | undefined;
   resetMessageMediaEditorRequest: WithTabId | undefined;
+
+  // telebridge
+  bridgeSetDecryptedText: {
+    messageKey: string;
+    text: string;
+  };
+  bridgeClearDecryptedCache: undefined;
 }
 
 export interface RequiredActionPayloads {

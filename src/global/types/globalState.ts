@@ -99,6 +99,13 @@ export type BridgeState = {
   isUnlocked: boolean;
   persistedJson?: string;
   chatKeyIds: Record<string, true>;
+  /**
+   * Decrypted plaintext keyed by messageKey (chatId-messageId). Runtime-only,
+   * never persisted — on app restart the vault locks and this map resets so
+   * decrypted text never touches disk. Entities are dropped: the v1 wire
+   * format commits cleartext-byte offsets that no longer map onto ciphertext.
+   */
+  decryptedByKey: Record<string, string>;
 };
 
 export type GlobalState = {

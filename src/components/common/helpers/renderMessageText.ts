@@ -17,6 +17,11 @@ import {
 import { getMessageKey } from '../../../util/keys/messageKey';
 import { getTranslationFn, type LangFn } from '../../../util/localization';
 import trimText from '../../../util/trimText';
+import {
+  canDecryptNow,
+  ensureDecryptedText,
+  getCachedDecryptedText,
+} from '../../../telebridge/receive';
 import renderText from './renderText';
 import { renderTextWithEntities } from './renderTextWithEntities';
 
@@ -45,14 +50,30 @@ export function renderMessageText({
   threadId?: ThreadId;
   maxTimestamp?: number;
 }) {
-  const { text, entities } = message.content.text || {};
+  const { text: rawText, entities: rawEntities } = message.content.text || {};
 
-  if (!text) {
+  if (!rawText) {
     const contentNotSupportedText = getMessageTextWithFallback(getTranslationFn(), message)?.text;
     return contentNotSupportedText ? [trimText(contentNotSupportedText, truncateLength)] : undefined;
   }
 
   const messageKey = getMessageKey(message);
+
+  // Telebridge: if the raw text is a tb1.* envelope and the chat has a usable
+  // key, swap in cached plaintext (or kick off a background decrypt and show
+  // ciphertext until the result lands). Entities are dropped alongside —
+  // their offsets refer to plaintext the ciphertext no longer has.
+  let text = rawText;
+  let entities = rawEntities;
+  if (canDecryptNow(message.chatId, rawText)) {
+    const cached = getCachedDecryptedText(messageKey);
+    if (cached !== undefined) {
+      text = cached;
+      entities = undefined;
+    } else {
+      ensureDecryptedText(message.chatId, messageKey, rawText);
+    }
+  }
 
   return renderTextWithEntities({
     text: trimText(text, truncateLength),
