@@ -61,6 +61,7 @@ import { oldTranslate } from '../../../util/oldLangProvider';
 import { debounce, onTickEnd, rafPromise } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
 import { callApi, cancelApiProgress } from '../../../api/gramjs';
+import { encryptSendFields } from '../../../telebridge/send';
 import {
   getIsSavedDialog,
   getUserFullName,
@@ -515,6 +516,18 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
     }
   }
 
+  // Telebridge: if this chat has an active symmetric key, encrypt outgoing text
+  // in place before fan-out. Runs AFTER bot-forum topic creation so the forum
+  // title is derived from plaintext, never ciphertext. Entities are cleared
+  // because their offsets are no longer valid against the encrypted payload.
+  if (!isForwarding) {
+    const encrypted = await encryptSendFields(chatId!, params.text, undefined);
+    if (encrypted.text !== params.text) {
+      params.text = encrypted.text;
+      params.entities = undefined;
+    }
+  }
+
   const isSingle = (!payload.attachments || payload.attachments.length <= 1) && !isForwarding;
   const isGrouped = !isSingle && payload.shouldGroupMessages;
   const localMessages: SendMessageParams[] = [];
@@ -699,12 +712,19 @@ addActionHandler('editMessage', (global, actions, payload): ActionReturnType => 
   actions.setEditingId({ messageId: undefined, tabId });
 
   (async () => {
+    // Telebridge: encrypt edited text if the chat has an active symmetric key.
+    // Entities are cleared — offsets no longer valid against ciphertext.
+    const encrypted = await encryptSendFields(chatId, text, undefined);
+    const hasEncrypted = encrypted.text !== text;
+    const finalText = hasEncrypted && encrypted.text ? encrypted.text : text;
+    const finalEntities = hasEncrypted ? undefined : entities;
+
     await callApi('editMessage', {
       chat,
       message,
       attachment: attachments ? attachments[0] : undefined,
-      text,
-      entities,
+      text: finalText,
+      entities: finalEntities,
       noWebPage: selectNoWebPage(global, chatId, threadId),
     }, progressCallback);
 
