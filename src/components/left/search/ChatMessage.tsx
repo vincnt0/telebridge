@@ -14,8 +14,10 @@ import {
 } from '../../../global/helpers';
 import { isApiPeerUser } from '../../../global/helpers/peers';
 import { selectPeer } from '../../../global/selectors';
+import { isTelebridgeMessage } from '../../../telebridge/protocol';
 import buildClassName from '../../../util/buildClassName';
 import { formatPastTimeShort } from '../../../util/dates/oldDateFormat';
+import { getMessageKey } from '../../../util/keys/messageKey';
 import { type LangFn } from '../../../util/localization';
 import { renderMessageSummary } from '../../common/helpers/renderMessageText';
 
@@ -44,6 +46,7 @@ type OwnProps = {
 
 type StateProps = {
   peer?: ApiPeer;
+  bridgeDecryptedText?: string;
 };
 
 const ChatMessage = ({
@@ -137,11 +140,18 @@ function renderSummary(
 }
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): Complete<StateProps> => {
+  (global, { chatId, message }): Complete<StateProps> => {
     const peer = selectPeer(global, chatId);
+
+    // Telebridge: re-render search result when decrypt lands.
+    const rawText = message.content.text?.text;
+    const bridgeDecryptedText = rawText && isTelebridgeMessage(rawText)
+      ? global.bridge.decryptedByKey[getMessageKey(message)]
+      : undefined;
 
     return {
       peer,
+      bridgeDecryptedText,
     };
   },
 )(ChatMessage));

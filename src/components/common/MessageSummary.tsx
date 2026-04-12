@@ -20,6 +20,8 @@ import {
   TRUNCATED_SUMMARY_LENGTH,
 } from '../../global/helpers/messageSummary';
 import { selectPeerStory, selectPollFromMessage, selectWebPageFromMessage } from '../../global/selectors';
+import { isTelebridgeMessage } from '../../telebridge/protocol';
+import { getMessageKey } from '../../util/keys/messageKey';
 import trimText from '../../util/trimText';
 import renderText from './helpers/renderText';
 
@@ -45,6 +47,7 @@ type StateProps = {
   poll?: ApiPoll;
   story?: ApiTypeStory;
   webPage?: ApiWebPage;
+  bridgeDecryptedText?: string;
 };
 
 function MessageSummary({
@@ -125,10 +128,20 @@ export default memo(withGlobal<OwnProps>(
     const storyData = message.content.storyData;
     const story = storyData && selectPeerStory(global, storyData.peerId, storyData.id);
 
+    // Telebridge: subscribe to the decrypted-text cache entry for this
+    // message so the summary re-renders when a background decrypt lands.
+    // Drives chat-list previews and non-Message consumers of
+    // getMessageSummaryText / getMessageTextWithSpoilers.
+    const rawText = message.content.text?.text;
+    const bridgeDecryptedText = rawText && isTelebridgeMessage(rawText)
+      ? global.bridge.decryptedByKey[getMessageKey(message)]
+      : undefined;
+
     return {
       poll,
       story,
       webPage,
+      bridgeDecryptedText,
     };
   },
 )(MessageSummary));
