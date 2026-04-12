@@ -19,6 +19,7 @@ import type { ActionReturnType, GlobalState } from '../../types';
 
 import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
 import { getTelebridgeVault } from '../../../telebridge/send';
+import { rafPromise } from '../../../util/schedulers';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 
 addActionHandler('bridgeSetDecryptedText', (global, actions, payload): ActionReturnType => {
@@ -65,6 +66,8 @@ addActionHandler('bridgeSetPassword', async (global, actions, payload): Promise<
   const { password } = payload;
 
   setGlobal(setBusy(global, true));
+  // Yield a frame so the busy spinner paints before Argon2id blocks the main thread.
+  await rafPromise();
 
   try {
     const vault = getTelebridgeVault();
@@ -93,6 +96,8 @@ addActionHandler('bridgeUnlock', async (global, actions, payload): Promise<void>
   const { password } = payload;
 
   setGlobal(setBusy(global, true));
+  // Yield a frame so the busy spinner paints before Argon2id blocks the main thread.
+  await rafPromise();
 
   try {
     const vault = getTelebridgeVault();
@@ -127,9 +132,16 @@ addActionHandler('bridgeUnlock', async (global, actions, payload): Promise<void>
   }
 });
 
-addActionHandler('bridgeLock', (global): ActionReturnType => {
+addActionHandler('bridgeLock', async (global): Promise<void> => {
+  // Flip busy first so the button renders a spinner, then yield a frame before
+  // the cache-clear triggers a re-render storm across chat list + messages.
+  setGlobal(setBusy(global, true));
+  await rafPromise();
+
   getTelebridgeVault().lock();
-  return {
+
+  global = getGlobal();
+  setGlobal({
     ...global,
     bridge: {
       ...global.bridge,
@@ -139,13 +151,15 @@ addActionHandler('bridgeLock', (global): ActionReturnType => {
       isBusy: false,
       lastError: undefined,
     },
-  };
+  });
 });
 
 addActionHandler('bridgeChangePassword', async (global, actions, payload): Promise<void> => {
   const { currentPassword, newPassword } = payload;
 
   setGlobal(setBusy(global, true));
+  // Yield a frame so the busy spinner paints before Argon2id blocks the main thread.
+  await rafPromise();
 
   try {
     const vault = getTelebridgeVault();

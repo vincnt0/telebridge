@@ -22,6 +22,7 @@ type OwnProps = {
 type StateProps = {
   isInitialized: boolean;
   isUnlocked: boolean;
+  isBusy: boolean;
   chatKeyCount: number;
 };
 
@@ -29,6 +30,7 @@ const SettingsBridge = ({
   isActive,
   isInitialized,
   isUnlocked,
+  isBusy,
   chatKeyCount,
   onReset,
 }: OwnProps & StateProps) => {
@@ -84,17 +86,17 @@ const SettingsBridge = ({
 
       <div className={styles.actions}>
         {!isInitialized && (
-          <Button color="primary" onClick={openSetup}>
+          <Button color="primary" onClick={openSetup} isLoading={isBusy} disabled={isBusy}>
             {lang('BridgeSetupButton')}
           </Button>
         )}
         {isInitialized && !isUnlocked && (
-          <Button color="primary" onClick={openUnlock}>
+          <Button color="primary" onClick={openUnlock} isLoading={isBusy} disabled={isBusy}>
             {lang('BridgeUnlockButton')}
           </Button>
         )}
         {isInitialized && isUnlocked && (
-          <Button color="danger" onClick={handleLock}>
+          <Button color="danger" onClick={handleLock} isLoading={isBusy} disabled={isBusy}>
             {lang('BridgeLockButton')}
           </Button>
         )}
@@ -110,6 +112,7 @@ export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => ({
     isInitialized: global.bridge.isInitialized,
     isUnlocked: global.bridge.isUnlocked,
+    isBusy: Boolean(global.bridge.isBusy),
     chatKeyCount: Object.keys(global.bridge.chatKeyIds).length,
   }),
 )(SettingsBridge));
