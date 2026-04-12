@@ -11,3 +11,6 @@ dev/perf/screenshot*
 .DS_store
 .github/workflows/*
 !.github/workflows/package-and-publish.yml
+.gitnexus
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
