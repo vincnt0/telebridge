@@ -69,6 +69,18 @@
     margin-inline-end: 0.1875rem;
   }
 
+  .message-bridge-lock,
+  .message-bridge-warning {
+    margin-inline-end: 0.1875rem;
+    font-size: 0.875rem;
+    line-height: inherit;
+    opacity: 0.85;
+  }
+
+  .message-bridge-warning {
+    color: var(--color-error);
+  }
+
   .message-imported,
   .message-signature {
     overflow: hidden;

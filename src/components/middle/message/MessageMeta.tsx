@@ -36,6 +36,8 @@ type OwnProps = {
   isPinned?: boolean;
   withFullDate?: boolean;
   effectEmoji?: string;
+  isTelebridgeDecrypted?: boolean;
+  isTelebridgeFailed?: boolean;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   onTranslationClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   onEffectClick: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -56,6 +58,8 @@ const MessageMeta: FC<OwnProps> = ({
   isPinned,
   withFullDate,
   effectEmoji,
+  isTelebridgeDecrypted,
+  isTelebridgeFailed,
   onClick,
   onTranslationClick,
   onEffectClick,
@@ -189,6 +193,20 @@ const MessageMeta: FC<OwnProps> = ({
       )}
       {isPinned && (
         <Icon name="pinned-message" className="message-pinned" />
+      )}
+      {isTelebridgeDecrypted && (
+        <Icon
+          name="lock"
+          className="message-bridge-lock"
+          ariaLabel={lang('BridgeMessageEncrypted')}
+        />
+      )}
+      {isTelebridgeFailed && (
+        <Icon
+          name="warning"
+          className="message-bridge-warning"
+          ariaLabel={lang('BridgeMessageDecryptFailed')}
+        />
       )}
       {signature && (
         <span className="message-signature">{renderText(signature)}</span>

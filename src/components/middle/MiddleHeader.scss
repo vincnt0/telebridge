@@ -66,8 +66,23 @@
   }
 
   .chat-info-wrapper {
+    display: flex;
     flex-grow: 1;
+    align-items: center;
     min-width: 0;
+
+    > .ChatInfo {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+  }
+
+  .chat-bridge-lock {
+    flex-shrink: 0;
+    margin-inline-start: 0.375rem;
+    font-size: 1rem;
+    color: var(--color-text-secondary);
+    opacity: 0.85;
   }
 
   .header-tools {

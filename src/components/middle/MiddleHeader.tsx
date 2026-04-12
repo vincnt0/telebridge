@@ -40,6 +40,7 @@ import { isUserId } from '../../util/entities/ids';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useConnectionStatus from '../../hooks/useConnectionStatus';
+import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLongPress from '../../hooks/useLongPress';
 import useOldLang from '../../hooks/useOldLang';
@@ -47,6 +48,7 @@ import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import useWindowSize from '../../hooks/window/useWindowSize';
 
 import GroupChatInfo from '../common/GroupChatInfo';
+import Icon from '../common/icons/Icon';
 import PrivateChatInfo from '../common/PrivateChatInfo';
 import UnreadCounter from '../common/UnreadCounter';
 import Button from '../ui/Button';
@@ -89,6 +91,7 @@ type StateProps = {
   isFetchingDifference?: boolean;
   emojiStatusSticker?: ApiSticker;
   emojiStatusSlug?: string;
+  hasBridgeKey?: boolean;
 };
 
 const MiddleHeader: FC<OwnProps & StateProps> = ({
@@ -114,6 +117,7 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
   emojiStatusSticker,
   emojiStatusSlug,
   isSavedDialog,
+  hasBridgeKey,
   onFocusPinnedMessage,
 }) => {
   const {
@@ -129,6 +133,7 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
   } = getActions();
 
   const lang = useOldLang();
+  const langNew = useLang();
   const isBackButtonActive = useRef(true);
   const { isDesktop, isTablet } = useAppLayout();
 
@@ -312,6 +317,13 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
               noRtl
             />
           )}
+          {hasBridgeKey && (
+            <Icon
+              name="lock"
+              className="chat-bridge-lock"
+              ariaLabel={langNew('BridgeChatEncrypted')}
+            />
+          )}
         </div>
       </>
     );
@@ -424,6 +436,7 @@ export default memo(withGlobal<OwnProps>(
       emojiStatusSticker,
       emojiStatusSlug,
       isSavedDialog,
+      hasBridgeKey: Boolean(global.bridge.chatKeyIds[chatId]),
     };
   },
 )(MiddleHeader));

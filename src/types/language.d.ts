@@ -2056,6 +2056,9 @@ export interface LangPair {
   'NoForwardsRequestAccept': undefined;
   'TelebridgeDecryptingRetry': undefined;
   'TelebridgeForwardSkipped': undefined;
+  'BridgeChatEncrypted': undefined;
+  'BridgeMessageEncrypted': undefined;
+  'BridgeMessageDecryptFailed': undefined;
   'SettingsBridge': undefined;
   'BridgeTitle': undefined;
   'BridgeInfoDescription': undefined;

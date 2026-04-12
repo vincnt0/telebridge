@@ -473,6 +473,7 @@ const Message = ({
   webPage,
   summary,
   canSendStickers,
+  bridgeDecryptedText,
   observeIntersectionForBottom,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
@@ -1126,6 +1127,13 @@ const Message = ({
     observeIntersectionForPlaying,
   ]);
 
+  const rawMessageText = message.content.text?.text;
+  const isTelebridgePayload = Boolean(rawMessageText && isTelebridgeMessage(rawMessageText));
+  const isTelebridgeDecrypted = isTelebridgePayload && Boolean(bridgeDecryptedText);
+  const isTelebridgeFailed = Boolean(
+    rawMessageText && rawMessageText.startsWith('tb1.') && !isTelebridgeDecrypted,
+  );
+
   function renderReactionsAndMeta() {
     const meta = (
       <MessageMeta
@@ -1143,6 +1151,8 @@ const Message = ({
         availableReactions={availableReactions}
         isTranslated={Boolean(requestedTranslationLanguage ? currentTranslatedText : undefined)}
         effectEmoji={effect?.emoticon}
+        isTelebridgeDecrypted={isTelebridgeDecrypted}
+        isTelebridgeFailed={isTelebridgeFailed}
         onClick={handleMetaClick}
         onEffectClick={handleEffectClick}
         onTranslationClick={handleTranslationClick}
