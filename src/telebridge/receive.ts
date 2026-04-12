@@ -110,6 +110,29 @@ export function ensureDecryptedBeforeCopy(message: ApiMessage): boolean {
   return false;
 }
 
+/**
+ * Fire a background decrypt for every loaded Telebridge-encrypted message
+ * whose chat currently has a usable key. Called from the unlock action so
+ * messages that rendered during the locked period get replaced with
+ * plaintext without the user needing to scroll past them.
+ *
+ * Cheap when nothing matches: `canDecryptNow` short-circuits on
+ * non-tb1 text and locked-vault / missing-key cases; the per-message
+ * `inflight` guard prevents duplicates if the render loop also fired.
+ */
+export function backfillDecryptsForAllChats(): void {
+  const global = getGlobal();
+  if (!global.bridge.isUnlocked) return;
+
+  for (const [chatId, chatMessages] of Object.entries(global.messages.byChatId)) {
+    for (const message of Object.values(chatMessages.byId)) {
+      const text = message.content.text?.text;
+      if (!text || !isTelebridgeMessage(text)) continue;
+      ensureDecryptedText(chatId, getMessageKey(message), text);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Media receive path
 // ---------------------------------------------------------------------------

@@ -1,14 +1,25 @@
 /**
- * Telebridge bridge actions — minimal Phase 2 surface.
+ * Telebridge bridge actions.
  *
- * This file is intentionally narrow: it only wires the runtime decrypted
- * plaintext cache used by the render path. Full lock/unlock/first-run
- * handlers arrive with the Phase 3 UI commit.
+ * Vault lifecycle (first-run setup, unlock, lock, password change, chat-key
+ * storage) plus the runtime decrypted-plaintext cache used by the render
+ * path. All vault work goes through the singleton in `src/telebridge/send.ts`
+ * (`getTelebridgeVault()`); this module mirrors its state into `global.bridge`
+ * so components can react without touching the vault directly.
+ *
+ * Error handling: async actions that can fail (`bridgeUnlock`,
+ * `bridgeChangePassword`) trap the error, write a short message to
+ * `global.bridge.lastError`, and clear `isBusy`. Components display the
+ * string; `bridgeClearError` wipes it on next attempt. Passwords themselves
+ * are never written to global state — only the derived/encrypted outputs
+ * handled by TelebridgeState.
  */
 
-import type { ActionReturnType } from '../../types';
+import type { ActionReturnType, GlobalState } from '../../types';
 
-import { addActionHandler } from '../../index';
+import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
+import { getTelebridgeVault } from '../../../telebridge/send';
+import { addActionHandler, getGlobal, setGlobal } from '../../index';
 
 addActionHandler('bridgeSetDecryptedText', (global, actions, payload): ActionReturnType => {
   const { messageKey, text } = payload;
@@ -37,3 +48,164 @@ addActionHandler('bridgeClearDecryptedCache', (global): ActionReturnType => {
     },
   };
 });
+
+addActionHandler('bridgeClearError', (global): ActionReturnType => {
+  if (!global.bridge.lastError) return undefined;
+  return {
+    ...global,
+    bridge: { ...global.bridge, lastError: undefined },
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Vault lifecycle
+// ---------------------------------------------------------------------------
+
+addActionHandler('bridgeSetPassword', async (global, actions, payload): Promise<void> => {
+  const { password } = payload;
+
+  setGlobal(setBusy(global, true));
+
+  try {
+    const vault = getTelebridgeVault();
+    const persistedJson = await vault.initialize(password);
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        isInitialized: true,
+        isUnlocked: true,
+        persistedJson,
+        chatKeyIds: {},
+        decryptedByKey: {},
+        isBusy: false,
+        lastError: undefined,
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeUnlock', async (global, actions, payload): Promise<void> => {
+  const { password } = payload;
+
+  setGlobal(setBusy(global, true));
+
+  try {
+    const vault = getTelebridgeVault();
+    await vault.unlock(password);
+
+    // Rebuild chatKeyIds from persisted state — keys are already decrypted
+    // in memory, but we only surface the set of chatIds, never the bytes.
+    const chatKeyIds: Record<string, true> = {};
+    for (const chatId of Object.keys(vault.getPersistedState().chatKeys)) {
+      chatKeyIds[chatId] = true;
+    }
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        isUnlocked: true,
+        chatKeyIds,
+        decryptedByKey: {},
+        isBusy: false,
+        lastError: undefined,
+      },
+    });
+
+    // Fire-and-forget: walk loaded messages and kick off decrypts so
+    // components that already rendered during lock get their plaintext
+    // without user scroll.
+    backfillDecryptsForAllChats();
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeLock', (global): ActionReturnType => {
+  getTelebridgeVault().lock();
+  return {
+    ...global,
+    bridge: {
+      ...global.bridge,
+      isUnlocked: false,
+      chatKeyIds: {},
+      decryptedByKey: {},
+      isBusy: false,
+      lastError: undefined,
+    },
+  };
+});
+
+addActionHandler('bridgeChangePassword', async (global, actions, payload): Promise<void> => {
+  const { currentPassword, newPassword } = payload;
+
+  setGlobal(setBusy(global, true));
+
+  try {
+    const vault = getTelebridgeVault();
+    const persistedJson = await vault.changePassword(currentPassword, newPassword);
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        isBusy: false,
+        lastError: undefined,
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeStoreChatKey', async (global, actions, payload): Promise<void> => {
+  const { chatId, key, keyId } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    const persistedJson = await vault.storeChatKey(chatId, key, keyId);
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        chatKeyIds: {
+          ...global.bridge.chatKeyIds,
+          [chatId]: true,
+        },
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function setBusy(global: GlobalState, isBusy: boolean): GlobalState {
+  return {
+    ...global,
+    bridge: { ...global.bridge, isBusy, lastError: undefined },
+  };
+}
+
+function setError(global: GlobalState, err: unknown): GlobalState {
+  const message = err instanceof Error ? err.message : 'Bridge operation failed';
+  return {
+    ...global,
+    bridge: { ...global.bridge, isBusy: false, lastError: message },
+  };
+}
+

@@ -106,6 +106,10 @@ export type BridgeState = {
    * format commits cleartext-byte offsets that no longer map onto ciphertext.
    */
   decryptedByKey: Record<string, string>;
+  /** True while an async vault action (setup / unlock / change password) is in flight. Runtime-only. */
+  isBusy?: boolean;
+  /** Last user-facing error from a vault action (e.g., wrong password). Runtime-only. Cleared on next attempt. */
+  lastError?: string;
 };
 
 export type GlobalState = {

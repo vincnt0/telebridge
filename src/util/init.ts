@@ -9,6 +9,7 @@ import {
 import { INITIAL_GLOBAL_STATE } from '../global/initialState';
 import { updatePasscodeSettings } from '../global/reducers';
 import { registerMediaChats } from '../telebridge/mediaRegistry';
+import { getTelebridgeVault } from '../telebridge/send';
 import { cloneDeep } from './iteratees';
 import { clearStoredSession } from './sessions';
 
@@ -54,4 +55,19 @@ export async function initGlobal(force: boolean = false, prevGlobal?: GlobalStat
       if (hashes.length) registerMediaChats(hashes, chatId);
     });
   });
+
+  // Telebridge: rehydrate the singleton vault from the persisted blob so
+  // `isInitialized` on the global slice and the vault agree at boot time.
+  // The vault stays locked — unlock() runs from the UI once the user types
+  // their password. A corrupt blob is treated as no vault (state remains
+  // `isInitialized: false` from the cached slice, which should match).
+  if (global.bridge.persistedJson) {
+    try {
+      getTelebridgeVault().load(global.bridge.persistedJson);
+    } catch {
+      // Corrupt blob — leave vault uninitialized, the user will have to
+      // re-run setup. We deliberately don't surface this: it's a local
+      // disk-corruption case that shouldn't happen in normal operation.
+    }
+  }
 }

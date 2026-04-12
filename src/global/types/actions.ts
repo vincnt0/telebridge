@@ -3125,6 +3125,23 @@ export interface ActionPayloads {
     text: string;
   };
   bridgeClearDecryptedCache: undefined;
+  bridgeSetPassword: {
+    password: string;
+  };
+  bridgeUnlock: {
+    password: string;
+  };
+  bridgeLock: undefined;
+  bridgeChangePassword: {
+    currentPassword: string;
+    newPassword: string;
+  };
+  bridgeStoreChatKey: {
+    chatId: string;
+    key: Uint8Array;
+    keyId?: string;
+  };
+  bridgeClearError: undefined;
 }
 
 export interface RequiredActionPayloads {
