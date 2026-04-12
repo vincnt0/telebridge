@@ -53,6 +53,7 @@ import { compact, split } from '../../../util/iteratees';
 import { getMessageKey } from '../../../util/keys/messageKey';
 import { getServerTime } from '../../../util/serverTime';
 import { interpolateArray } from '../../../util/waveform';
+import { encryptForUpload, getMediaChatKey, MediaType } from '../../../telebridge/media';
 import { API_GENERAL_ID_LIMIT, PINNED_MESSAGES_LIMIT } from '../../../limits';
 import {
   buildApiChatFromPreview,
@@ -942,6 +943,22 @@ export async function rescheduleMessage({
   }));
 }
 
+function resolveAttachmentMediaType(attachment: ApiAttachment): MediaType {
+  if (attachment.voice) return MediaType.Voice;
+  if (attachment.shouldSendAsFile) return MediaType.Document;
+  if (attachment.gif) return MediaType.Animation;
+  const isVideo = SUPPORTED_VIDEO_CONTENT_TYPES.has(attachment.mimeType);
+  if (isVideo) return MediaType.Video;
+  if (
+    attachment.quick
+    && SUPPORTED_PHOTO_CONTENT_TYPES.has(attachment.mimeType)
+    && attachment.mimeType !== GIF_MIME_TYPE
+  ) {
+    return MediaType.Photo;
+  }
+  return MediaType.Document;
+}
+
 async function uploadMedia(message: ApiMessage, attachment: ApiAttachment, onProgress: ApiOnProgress) {
   const {
     filename, blobUrl, mimeType, quick, voice, audio, previewBlobUrl, shouldSendAsFile, shouldSendAsSpoiler, ttlSeconds,
@@ -955,8 +972,24 @@ async function uploadMedia(message: ApiMessage, attachment: ApiAttachment, onPro
     }
   };
 
-  const fetchAndUpload = async (url: string, progressCallback?: (progress: number) => void) => {
+  // Telebridge: resolve chat encryption key once; undefined means plaintext upload.
+  const bridgeChatKey = getMediaChatKey(message.chatId);
+  const bridgeMediaType = resolveAttachmentMediaType(attachment);
+
+  const fetchAndUpload = async (
+    url: string,
+    progressCallback?: (progress: number) => void,
+    mediaType: MediaType = MediaType.Document,
+  ) => {
     const file = await fetchFile(url, filename);
+    if (bridgeChatKey) {
+      const plainBytes = new Uint8Array(await file.arrayBuffer());
+      const encryptedBytes = await encryptForUpload(plainBytes, bridgeChatKey, mediaType);
+      const encryptedBuffer = new ArrayBuffer(encryptedBytes.byteLength);
+      new Uint8Array(encryptedBuffer).set(encryptedBytes);
+      const encryptedFile = new File([encryptedBuffer], filename, { type: 'application/octet-stream' });
+      return uploadFile(encryptedFile, progressCallback);
+    }
     return uploadFile(file, progressCallback);
   };
 
@@ -964,8 +997,8 @@ async function uploadMedia(message: ApiMessage, attachment: ApiAttachment, onPro
   const shouldUploadThumb = audio || isVideo || shouldSendAsFile;
 
   const [inputFile, thumb] = await Promise.all(compact([
-    fetchAndUpload(blobUrl, patchedOnProgress),
-    shouldUploadThumb && previewBlobUrl && fetchAndUpload(previewBlobUrl),
+    fetchAndUpload(blobUrl, patchedOnProgress, bridgeMediaType),
+    shouldUploadThumb && previewBlobUrl && fetchAndUpload(previewBlobUrl, undefined, MediaType.Document),
   ]));
 
   const attributes: GramJs.TypeDocumentAttribute[] = [new GramJs.DocumentAttributeFilename({ fileName: filename })];
