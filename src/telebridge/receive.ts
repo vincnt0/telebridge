@@ -17,7 +17,10 @@
  * in cache.ts strips `decryptedByKey` at serialization time.
  */
 
+import type { ApiMessage } from '../api/types';
+
 import { getActions, getGlobal } from '../global/index';
+import { getMessageKey } from '../util/keys/messageKey';
 
 import { decryptSymmetricMessage } from './decrypt';
 import {
@@ -89,6 +92,22 @@ export function ensureDecryptedText(
       inflight.delete(messageKey);
     }
   })();
+}
+
+/**
+ * Gate for one-shot consumers (copy-to-clipboard, share sheets) that snapshot
+ * text at invocation time. Returns true when the message is plaintext or has
+ * already been decrypted. Returns false on cache miss for a Telebridge
+ * message, after kicking off a background decrypt — the caller should show a
+ * retry notification and abort the copy so the user doesn't get ciphertext.
+ */
+export function ensureDecryptedBeforeCopy(message: ApiMessage): boolean {
+  const rawText = message.content.text?.text;
+  if (!rawText || !isTelebridgeMessage(rawText)) return true;
+  const messageKey = getMessageKey(message);
+  if (getCachedDecryptedText(messageKey) !== undefined) return true;
+  ensureDecryptedText(message.chatId, messageKey, rawText);
+  return false;
 }
 
 // ---------------------------------------------------------------------------

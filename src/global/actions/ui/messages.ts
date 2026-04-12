@@ -31,7 +31,8 @@ import { getMessageSummaryText } from '../../helpers/messageSummary';
 import { addTabStateResetterAction } from '../../helpers/meta';
 import { getPeerTitle } from '../../helpers/peers';
 import { renderMessageSummaryHtml } from '../../helpers/renderMessageSummaryHtml';
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
+import { ensureDecryptedBeforeCopy } from '../../../telebridge/receive';
+import { addActionHandler, getActions, getGlobal, setGlobal } from '../../index';
 import {
   addActiveMediaDownload,
   cancelMessageMediaDownload,
@@ -1064,6 +1065,14 @@ function copyTextForMessages(global: GlobalState, chatId: string, messageIds: nu
     .map((id) => chatMessages[id])
     .filter((message) => selectAllowedMessageActionsSlow(global, message, threadId).canCopy)
     .sort((message1, message2) => message1.id - message2.id);
+
+  // Telebridge: abort batch copy if any message still needs decrypt, so the
+  // clipboard doesn't end up with mixed plaintext + ciphertext.
+  const hasColdCiphertext = messages.some((message) => !ensureDecryptedBeforeCopy(message));
+  if (hasColdCiphertext) {
+    getActions().showNotification({ message: { key: 'TelebridgeDecryptingRetry' } });
+    return;
+  }
 
   const resultHtml: string[] = [];
   const resultText: string[] = [];

@@ -2,6 +2,7 @@ import type { ApiMessage, StatefulMediaContent } from '../../../../api/types';
 import type { IconName } from '../../../../types/icons';
 import { ApiMediaFormat } from '../../../../api/types';
 
+import { getActions } from '../../../../global';
 import {
   getMessageContact,
   getMessageHtmlId,
@@ -13,6 +14,7 @@ import {
   hasMediaLocalBlobUrl,
 } from '../../../../global/helpers';
 import { getMessageTextWithSpoilers } from '../../../../global/helpers/messageSummary';
+import { ensureDecryptedBeforeCopy } from '../../../../telebridge/receive';
 import { IS_SAFARI } from '../../../../util/browser/windowEnvironment';
 import {
   CLIPBOARD_ITEM_SUPPORTED,
@@ -94,6 +96,13 @@ export function getMessageCopyOptions(
         } else if (hasSelection) {
           document.execCommand('copy');
         } else {
+          // Telebridge: block clipboard write when the plaintext cache is
+          // still cold so the user doesn't end up with a tb1 ciphertext.
+          if (!ensureDecryptedBeforeCopy(message)) {
+            getActions().showNotification({ message: { key: 'TelebridgeDecryptingRetry' } });
+            afterEffect?.();
+            return;
+          }
           const clipboardText = renderMessageText(
             { message, shouldRenderAsHtml: true },
           ) as string[];

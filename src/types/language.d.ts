@@ -2054,6 +2054,7 @@ export interface LangPair {
   'ReminderSetToast': undefined;
   'NoForwardsRequestReject': undefined;
   'NoForwardsRequestAccept': undefined;
+  'TelebridgeDecryptingRetry': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
