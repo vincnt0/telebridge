@@ -27,14 +27,11 @@ import {
   createApiMessageFromTypingDraft,
   getIsSavedDialog,
   getMessageContent,
-  getMessageStatefulContent,
   getMessageText,
   groupMessageIdsByThreadId,
   isActionMessage,
   isMessageLocal,
 } from '../../helpers';
-import { getAllMessageMediaHashes } from '../../helpers/messageMedia';
-import { registerMediaChats } from '../../../telebridge/mediaRegistry';
 import { getMessageReplyInfo, getStoryReplyInfo } from '../../helpers/replies';
 import {
   addActionHandler,
@@ -128,14 +125,6 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
       const newMessage = selectChatMessage(global, chatId, id)!;
 
-      // Telebridge: register all media hashes on this message against its
-      // chatId so the mediaLoader can look up the correct symmetric key on
-      // download and decrypt the ciphertext blob before hand-off to the UI.
-      const bridgeStatefulContent = getMessageStatefulContent(global, newMessage);
-      const bridgeMediaHashes = getAllMessageMediaHashes(newMessage, bridgeStatefulContent);
-      if (bridgeMediaHashes.length) {
-        registerMediaChats(bridgeMediaHashes, chatId);
-      }
       const replyInfo = getMessageReplyInfo(newMessage);
       const storyReplyInfo = getStoryReplyInfo(newMessage);
       const chat = selectChat(global, chatId);

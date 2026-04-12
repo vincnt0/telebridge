@@ -2,11 +2,13 @@ import type { GlobalState } from '../global/types';
 
 import { IS_MOCKED_CLIENT } from '../config';
 import { loadCache, loadCachedSharedState } from '../global/cache';
+import { getAllMessageMediaHashes, getMessageStatefulContent } from '../global/helpers';
 import {
   getGlobal, setGlobal,
 } from '../global/index';
 import { INITIAL_GLOBAL_STATE } from '../global/initialState';
 import { updatePasscodeSettings } from '../global/reducers';
+import { registerMediaChats } from '../telebridge/mediaRegistry';
 import { cloneDeep } from './iteratees';
 import { clearStoredSession } from './sessions';
 
@@ -42,4 +44,14 @@ export async function initGlobal(force: boolean = false, prevGlobal?: GlobalStat
   }
 
   setGlobal(global);
+
+  // Telebridge: rebuild the media-hash → chatId registry from cache-restored
+  // messages. The registry is runtime-only and was empty until this sweep.
+  Object.entries(global.messages.byChatId).forEach(([chatId, { byId }]) => {
+    Object.values(byId).forEach((message) => {
+      const statefulContent = getMessageStatefulContent(global, message);
+      const hashes = getAllMessageMediaHashes(message, statefulContent);
+      if (hashes.length) registerMediaChats(hashes, chatId);
+    });
+  });
 }

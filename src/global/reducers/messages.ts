@@ -25,6 +25,7 @@ import {
 } from '../../util/iteratees';
 import { isLocalMessageId, type MessageKey } from '../../util/keys/messageKey';
 import { unload } from '../../util/mediaLoader';
+import { registerMediaChats } from '../../telebridge/mediaRegistry';
 import {
   getAllMessageMediaHashes,
   getMessageStatefulContent,
@@ -63,6 +64,18 @@ import {
 import { clearMessageSummary, clearMessageTranslation } from './translations';
 
 type MessageStoreSections = GlobalState['messages']['byChatId'][string];
+
+// Telebridge: fill the media-hash → chatId registry so the mediaLoader can
+// resolve the correct symmetric key on download. Runs whenever a message
+// enters or changes content in global state — covers history load, cache
+// hydration, pinned fetches, shared media, edits, and newMessage updates.
+function registerBridgeMediaForMessage<T extends GlobalState>(
+  global: T, message: ApiMessage, chatId: string,
+): void {
+  const statefulContent = getMessageStatefulContent(global, message);
+  const hashes = getAllMessageMediaHashes(message, statefulContent);
+  if (hashes.length) registerMediaChats(hashes, chatId);
+}
 
 export function updateCurrentMessageList<T extends GlobalState>(
   global: T,
@@ -184,6 +197,10 @@ export function addChatMessagesById<T extends GlobalState>(
     return global;
   }
 
+  Object.values(newById).forEach((message) => {
+    registerBridgeMediaForMessage(global, message, chatId);
+  });
+
   return replaceChatMessages(global, chatId, {
     ...newById,
     ...byId,
@@ -242,6 +259,10 @@ export function updateChatMessage<T extends GlobalState>(
     return global;
   }
 
+  if (messageUpdate.content) {
+    registerBridgeMediaForMessage(global, updatedMessage as ApiMessage, chatId);
+  }
+
   return replaceChatMessages(global, chatId, {
     ...byId,
     [messageId]: updatedMessage,
@@ -270,6 +291,10 @@ export function updateScheduledMessage<T extends GlobalState>(
 
   if (!updatedMessage.id) {
     return global;
+  }
+
+  if (messageUpdate.content) {
+    registerBridgeMediaForMessage(global, updatedMessage as ApiMessage, chatId);
   }
 
   return updateScheduledMessages(global, chatId, {
