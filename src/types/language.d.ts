@@ -2055,6 +2055,7 @@ export interface LangPair {
   'NoForwardsRequestReject': undefined;
   'NoForwardsRequestAccept': undefined;
   'TelebridgeDecryptingRetry': undefined;
+  'TelebridgeForwardSkipped': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {

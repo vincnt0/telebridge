@@ -2801,3 +2801,4 @@
 "NoForwardsRequestReject" = "Reject";
 "NoForwardsRequestAccept" = "Accept";
 "TelebridgeDecryptingRetry" = "Decrypting — try again in a moment.";
+"TelebridgeForwardSkipped" = "Some encrypted messages couldn't be forwarded.";

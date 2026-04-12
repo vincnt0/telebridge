@@ -61,11 +61,14 @@ import { oldTranslate } from '../../../util/oldLangProvider';
 import { debounce, onTickEnd, rafPromise } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
 import { callApi, cancelApiProgress } from '../../../api/gramjs';
-import { encryptSendFields } from '../../../telebridge/send';
+import { decryptSymmetricMessage } from '../../../telebridge/decrypt';
+import { isTelebridgeMessage } from '../../../telebridge/protocol';
+import { encryptSendFields, getTelebridgeVault } from '../../../telebridge/send';
 import {
   getIsSavedDialog,
   getUserFullName,
   groupMessageIdsByThreadId,
+  hasMessageMedia,
   isChatChannel,
   isChatSuperGroup,
   isDeletedUser,
@@ -1689,10 +1692,49 @@ async function executeForwardMessages(global: GlobalState, sendParams: SendMessa
 
   const [realMessages, serviceMessages] = partition(messages, (m) => !isServiceNotificationMessage(m));
   const forwardableRealMessages = realMessages.filter((message) => selectCanForwardMessage(global, message));
-  if (forwardableRealMessages.length) {
+
+  // Telebridge: pull encrypted source messages out of the native-forward bucket so
+  // they can be decrypted with the source chat key and re-sent (the destination
+  // chat's key will re-encrypt them via the sendMessage hook). Plain messages keep
+  // the native forward path, which preserves the "forwarded from" banner.
+  const bridgeVault = getTelebridgeVault();
+  const canUseBridgeVault = bridgeVault.isInitialized() && !bridgeVault.isLocked();
+  const [bridgeSourcedMessages, plainForwardableMessages] = partition(
+    forwardableRealMessages,
+    (message) => {
+      const rawText = message.content.text?.text;
+      return Boolean(rawText && isTelebridgeMessage(rawText));
+    },
+  );
+
+  const reEncryptableForwards: { plaintext: string }[] = [];
+  let hasUnsupportedBridgeForward = false;
+
+  for (const message of bridgeSourcedMessages) {
+    const rawText = message.content.text?.text;
+    const sourceChatKey = canUseBridgeVault ? bridgeVault.getChatKey(message.chatId) : undefined;
+    if (!rawText || !sourceChatKey || hasMessageMedia(message)) {
+      // Media forwards of encrypted content need download+decrypt+re-upload; not
+      // in scope for this session. Missing source key is also a hard skip.
+      hasUnsupportedBridgeForward = true;
+      continue;
+    }
+    const decrypted = await decryptSymmetricMessage(rawText, sourceChatKey);
+    if (decrypted.status !== 'success' || !decrypted.text) {
+      hasUnsupportedBridgeForward = true;
+      continue;
+    }
+    reEncryptableForwards.push({ plaintext: decrypted.text });
+  }
+
+  if (hasUnsupportedBridgeForward) {
+    getActions().showNotification({ message: { key: 'TelebridgeForwardSkipped' } });
+  }
+
+  if (plainForwardableMessages.length) {
     const messageSlices = global.config?.maxForwardedCount
-      ? splitMessagesForForwarding(forwardableRealMessages, global.config.maxForwardedCount)
-      : [forwardableRealMessages];
+      ? splitMessagesForForwarding(plainForwardableMessages, global.config.maxForwardedCount)
+      : [plainForwardableMessages];
     for (const slice of messageSlices) {
       const forwardParams: ForwardMessagesParams = {
         fromChat,
@@ -1723,6 +1765,30 @@ async function executeForwardMessages(global: GlobalState, sendParams: SendMessa
           forwardedLocalMessagesSlice,
         });
       }
+    }
+  }
+
+  // Telebridge: fresh-send each decrypted-then-re-encrypted message into the
+  // destination chat. Re-enters the encryptSendFields hook automatically because
+  // sendMessageOrReduceLocal → sendMessage → callApi('sendMessage') routes through
+  // the gramjs send-path wiring; we also encrypt up-front so the local message
+  // state matches what goes on the wire. Loses the "forwarded from" banner by
+  // design — matches Signal-style E2EE semantics.
+  if (reEncryptableForwards.length) {
+    const bridgeReplyInfo = selectMessageReplyInfo(global, toChat.id, toThreadId);
+    for (const { plaintext } of reEncryptableForwards) {
+      const encrypted = await encryptSendFields(toChat.id, plaintext, undefined);
+      const bridgeParams: SendMessageParams = {
+        chat: toChat,
+        replyInfo: bridgeReplyInfo,
+        text: encrypted.text ?? plaintext,
+        isSilent,
+        scheduledAt,
+        scheduleRepeatPeriod,
+        sendAs,
+        lastMessageId,
+      };
+      await sendMessageOrReduceLocal(global, bridgeParams, localMessages);
     }
   }
 
