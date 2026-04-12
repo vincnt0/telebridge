@@ -344,6 +344,12 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     isMinimized: false,
     isHidden: false,
   },
+
+  bridge: {
+    isInitialized: false,
+    isUnlocked: false,
+    chatKeyIds: {},
+  },
 };
 
 export const INITIAL_TAB_STATE: TabState = {

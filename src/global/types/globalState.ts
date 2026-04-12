@@ -81,6 +81,26 @@ import type { RegularLangFnParameters } from '../../util/localization';
 import type { SharedState } from './sharedState';
 import type { TabState } from './tabState';
 
+/**
+ * Telebridge bridge state — encryption vault status + persistence blob.
+ *
+ * The live vault (TelebridgeState) is a singleton in `src/telebridge/send.ts`;
+ * this slice is the reactive mirror used by components, plus the serialized
+ * JSON blob persisted via `cache.ts`.
+ *
+ * - `isInitialized`: has the vault been first-run-set-up (password chosen)?
+ * - `isUnlocked`: is the vault currently unlocked (in-memory keys present)?
+ * - `persistedJson`: serialized vault (encrypted at rest). Safe to cache.
+ * - `chatKeyIds`: chat IDs that have an active symmetric key — drives
+ *   per-chat UI indicators without exposing keys to selectors.
+ */
+export type BridgeState = {
+  isInitialized: boolean;
+  isUnlocked: boolean;
+  persistedJson?: string;
+  chatKeyIds: Record<string, true>;
+};
+
 export type GlobalState = {
   cacheVersion: number;
   isInited: boolean;
@@ -489,6 +509,8 @@ export type GlobalState = {
     balance: ApiTonAmount;
     history: StarsTransactionHistory;
   };
+
+  bridge: BridgeState;
 };
 
 export type RequiredGlobalState = GlobalState & { _: never };

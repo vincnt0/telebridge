@@ -484,6 +484,13 @@ function reduceGlobal<T extends GlobalState>(global: T) {
       'invalidAttemptsCount',
       'timeoutUntil',
     ]),
+    // Telebridge: persist the encrypted vault blob + initialized flag.
+    // isUnlocked + chatKeyIds are runtime-only (vault relocks on restart).
+    bridge: {
+      ...INITIAL_GLOBAL_STATE.bridge,
+      isInitialized: global.bridge.isInitialized,
+      persistedJson: global.bridge.persistedJson,
+    },
   };
 
   return reducedGlobal;
