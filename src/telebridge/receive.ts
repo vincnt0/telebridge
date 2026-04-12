@@ -20,6 +20,12 @@
 import { getActions, getGlobal } from '../global/index';
 
 import { decryptSymmetricMessage } from './decrypt';
+import {
+  decryptAfterDownload,
+  getMediaChatKey,
+  isEncryptedMedia,
+} from './media';
+import { getMediaChatId } from './mediaRegistry';
 import { isTelebridgeMessage } from './protocol';
 import { getTelebridgeVault } from './send';
 
@@ -83,4 +89,47 @@ export function ensureDecryptedText(
       inflight.delete(messageKey);
     }
   })();
+}
+
+// ---------------------------------------------------------------------------
+// Media receive path
+// ---------------------------------------------------------------------------
+
+/**
+ * Decrypt a downloaded media blob if the URL is registered to a Telebridge
+ * chat and the vault currently holds a key for it. Returns the original
+ * blob untouched when no registration is known, when the vault is locked,
+ * or when the buffer doesn't carry the Telebridge file header.
+ *
+ * The main-thread mediaLoader calls this right after a successful remote
+ * fetch (see `fetchFromCacheOrRemote` in src/util/mediaLoader.ts).
+ */
+export async function decryptMediaBlobIfRegistered(
+  url: string,
+  blob: Blob,
+): Promise<Blob> {
+  const chatId = getMediaChatId(url);
+  if (!chatId) return blob;
+
+  const chatKey = getMediaChatKey(chatId);
+  if (!chatKey) return blob;
+
+  // Fast gate: peek at the prefix to spare the full arrayBuffer() copy
+  // for plaintext payloads in mixed chats. `isEncryptedMedia` inspects the
+  // leading version byte plus the minimum-size check.
+  const prefix = new Uint8Array(await blob.slice(0, 64).arrayBuffer());
+  if (!isEncryptedMedia(prefix)) {
+    return blob;
+  }
+
+  const cipherBuffer = new Uint8Array(await blob.arrayBuffer());
+  const plaintext = await decryptAfterDownload(cipherBuffer, chatKey);
+
+  // decryptAfterDownload returns the original buffer on decrypt failure.
+  // Wrap in a new blob preserving the original mime type.
+  // Slice into a fresh ArrayBuffer so the Blob doesn't reference the
+  // Uint8Array's backing store (TS DOM types reject SharedArrayBuffer views).
+  const bodyCopy = new ArrayBuffer(plaintext.byteLength);
+  new Uint8Array(bodyCopy).set(plaintext);
+  return new Blob([bodyCopy], { type: blob.type });
 }

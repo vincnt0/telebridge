@@ -12,6 +12,7 @@ import {
   MEDIA_CACHE_NAME_AVATARS,
 } from '../config';
 import { callApi, cancelApiProgress } from '../api/gramjs';
+import { decryptMediaBlobIfRegistered } from '../telebridge/receive';
 import {
   IS_OPUS_SUPPORTED, IS_PROGRESSIVE_SUPPORTED,
 } from './browser/windowEnvironment';
@@ -138,7 +139,15 @@ async function fetchFromCacheOrRemote(
     if (cached) {
       let media = cached;
 
-      if (cached.type === 'audio/ogg' && !IS_OPUS_SUPPORTED) {
+      // Telebridge: decrypt the cached ciphertext before handoff. The cache
+      // intentionally stores ciphertext (never plaintext), so we pay the
+      // AES-GCM cost on every hit — acceptable given the performance of
+      // Web Crypto and the security benefit of plaintext never hitting disk.
+      if (media instanceof Blob) {
+        media = await decryptMediaBlobIfRegistered(url, media);
+      }
+
+      if (media instanceof Blob && media.type === 'audio/ogg' && !IS_OPUS_SUPPORTED) {
         media = await oggToWav(media);
       }
 
@@ -167,7 +176,18 @@ async function fetchFromCacheOrRemote(
   }
 
   let { mimeType } = remote;
-  let prepared = prepareMedia(remote.dataBlob);
+  let { dataBlob } = remote;
+
+  // Telebridge: decrypt freshly downloaded ciphertext before prepareMedia
+  // returns a blob URL. The downloaded data is also already saved to the
+  // persistent cache by the API worker, but that save goes through the
+  // upstream encrypted bytes (see src/api/gramjs/methods/media.ts), so the
+  // cache-hit branch above will reach the same decrypt path on next read.
+  if (dataBlob instanceof Blob) {
+    dataBlob = await decryptMediaBlobIfRegistered(url, dataBlob);
+  }
+
+  let prepared = prepareMedia(dataBlob);
 
   if (mimeType === 'audio/ogg' && !IS_OPUS_SUPPORTED) {
     const blob = await fetchBlob(prepared);
