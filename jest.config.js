@@ -17,6 +17,9 @@ export default {
     '\\.(jsx?|tsx?)$': 'babel-jest',
     '\\.txt$': '@glen/jest-raw-loader',
   },
+  transformIgnorePatterns: [
+    '/node_modules/(?!(@noble)/)',
+  ],
   globals: {
     APP_REVISION: 'jest-test',
     APP_VERSION: '0.0.1',
