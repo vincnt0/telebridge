@@ -19,7 +19,7 @@ import type { ActionReturnType, GlobalState } from '../../types';
 
 import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
 import { getTelebridgeVault } from '../../../telebridge/send';
-import { rafPromise } from '../../../util/schedulers';
+import { pause, rafPromise } from '../../../util/schedulers';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 
 addActionHandler('bridgeSetDecryptedText', (global, actions, payload): ActionReturnType => {
@@ -66,8 +66,10 @@ addActionHandler('bridgeSetPassword', async (global, actions, payload): Promise<
   const { password } = payload;
 
   setGlobal(setBusy(global, true));
-  // Yield a frame so the busy spinner paints before Argon2id blocks the main thread.
+  // rAF fires at the start of the next frame (before paint); a following macrotask
+  // yield lets the spinner actually paint before Argon2id blocks the main thread.
   await rafPromise();
+  await pause(0);
 
   try {
     const vault = getTelebridgeVault();
@@ -96,8 +98,10 @@ addActionHandler('bridgeUnlock', async (global, actions, payload): Promise<void>
   const { password } = payload;
 
   setGlobal(setBusy(global, true));
-  // Yield a frame so the busy spinner paints before Argon2id blocks the main thread.
+  // rAF fires at the start of the next frame (before paint); a following macrotask
+  // yield lets the spinner actually paint before Argon2id blocks the main thread.
   await rafPromise();
+  await pause(0);
 
   try {
     const vault = getTelebridgeVault();
@@ -158,8 +162,10 @@ addActionHandler('bridgeChangePassword', async (global, actions, payload): Promi
   const { currentPassword, newPassword } = payload;
 
   setGlobal(setBusy(global, true));
-  // Yield a frame so the busy spinner paints before Argon2id blocks the main thread.
+  // rAF fires at the start of the next frame (before paint); a following macrotask
+  // yield lets the spinner actually paint before Argon2id blocks the main thread.
   await rafPromise();
+  await pause(0);
 
   try {
     const vault = getTelebridgeVault();
