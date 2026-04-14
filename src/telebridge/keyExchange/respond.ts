@@ -123,6 +123,16 @@ export async function respondToKeyExchange(
     senderX25519ForContact,
   );
 
+  // The byte-equality gate above guarantees the wire identity matches the
+  // pinned (and therefore active) contact key, so `storeContactKey` can only
+  // take the active-entry path and return `'unchanged'`. Surface any other
+  // outcome as an invariant violation rather than silently papering over it.
+  if (tofuResult.status !== 'unchanged') {
+    throw new Error(
+      `respondToKeyExchange: unexpected TOFU status '${tofuResult.status}' after byte-equality gate`,
+    );
+  }
+
   // 6. Perform ECDH: my static X25519 private × sender's ephemeral X25519 public
   const sharedSecret = computeSharedSecret(myIdentity.x25519PrivateKey, payload.ephemeralX25519);
 
@@ -154,8 +164,6 @@ export async function respondToKeyExchange(
     chatKey,
     keyId,
     senderPublicKey: payload.senderIdKey,
-    tofuStatus: tofuResult.status === 'new' ? 'new'
-      : tofuResult.status === 'changed' ? 'changed'
-        : 'unchanged',
+    tofuStatus: 'unchanged',
   };
 }

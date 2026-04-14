@@ -97,9 +97,14 @@ export function getMessageCopyOptions(
           document.execCommand('copy');
         } else {
           // Telebridge: block clipboard write when the plaintext cache is
-          // still cold so the user doesn't end up with a tb1 ciphertext.
-          if (!ensureDecryptedBeforeCopy(message)) {
-            getActions().showNotification({ message: { key: 'TelebridgeDecryptingRetry' } });
+          // still cold, or when the payload is a tb1.pk/tb1.kx handshake
+          // (which has no plaintext form and would leak base64 bytes).
+          const copyGate = ensureDecryptedBeforeCopy(message);
+          if (copyGate !== 'ok') {
+            const key = copyGate === 'handshake'
+              ? 'TelebridgeHandshakeNotCopyable'
+              : 'TelebridgeDecryptingRetry';
+            getActions().showNotification({ message: { key } });
             afterEffect?.();
             return;
           }

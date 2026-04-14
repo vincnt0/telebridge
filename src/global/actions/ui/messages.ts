@@ -1066,11 +1066,15 @@ function copyTextForMessages(global: GlobalState, chatId: string, messageIds: nu
     .filter((message) => selectAllowedMessageActionsSlow(global, message, threadId).canCopy)
     .sort((message1, message2) => message1.id - message2.id);
 
-  // Telebridge: abort batch copy if any message still needs decrypt, so the
-  // clipboard doesn't end up with mixed plaintext + ciphertext.
-  const hasColdCiphertext = messages.some((message) => !ensureDecryptedBeforeCopy(message));
-  if (hasColdCiphertext) {
-    getActions().showNotification({ message: { key: 'TelebridgeDecryptingRetry' } });
+  // Telebridge: abort batch copy if any message is a handshake payload or
+  // still needs decrypt, so the clipboard doesn't end up with mixed
+  // plaintext + ciphertext (or worse, raw handshake base64).
+  const gateResults = messages.map((message) => ensureDecryptedBeforeCopy(message));
+  const hasHandshake = gateResults.some((r) => r === 'handshake');
+  const hasColdCiphertext = gateResults.some((r) => r === 'coldCiphertext');
+  if (hasHandshake || hasColdCiphertext) {
+    const key = hasHandshake ? 'TelebridgeHandshakeNotCopyable' : 'TelebridgeDecryptingRetry';
+    getActions().showNotification({ message: { key } });
     return;
   }
 

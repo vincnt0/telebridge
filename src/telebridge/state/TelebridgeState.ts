@@ -799,6 +799,26 @@ export class TelebridgeState {
   }
 
   /**
+   * Stamp the active contact key's `lastUsed` to now without touching trust
+   * level or origin. Intended for hot paths like per-message Ed25519 verify
+   * where we just want the "Last used …" UI to track real traffic. No-op if
+   * the contact is unknown or has no active key — the caller shouldn't have
+   * to gate on vault state for a best-effort bookkeeping bump.
+   *
+   * Note: this mutates in-memory state only. The surrounding `persistedJson`
+   * will pick the change up on the next save triggered by another vault
+   * action (e.g. `storeChatKey`, `verifyContact`); we intentionally don't
+   * persist per-message to avoid encrypting+serializing on every inbound.
+   */
+  bumpContactKeyLastUsed(contactId: string): void {
+    const record = this.persisted.contacts[contactId];
+    if (!record) return;
+    const active = findActiveKey(record);
+    if (!active) return;
+    active.lastUsed = Date.now();
+  }
+
+  /**
    * Mark a contact's active key as manually verified (post-hoc QR flow).
    * Lifts trust to Verified and tags the active entry's origin.
    *

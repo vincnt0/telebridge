@@ -29,7 +29,7 @@ import {
   isEncryptedMedia,
 } from './media';
 import { getMediaChatId } from './mediaRegistry';
-import { isTelebridgeMessage } from './protocol';
+import { isTelebridgeMachineMessage, isTelebridgeMessage } from './protocol';
 import { getTelebridgeVault } from './send';
 
 /** Keys currently in-flight so we don't stack duplicate decrypts per render. */
@@ -96,13 +96,23 @@ export function ensureDecryptedText(
     try {
       const result = await decryptSymmetricMessage(encryptedText, chatKey, senderPublicKey);
       if (result.status === 'success') {
+        // Stamp the contact key's `lastUsed` when we actually verified the
+        // sender signature against a known key — the only path where the
+        // bump reflects real traffic. Unsigned/unknown-sender decrypts
+        // (senderPublicKey === undefined, isSignatureVerified undefined)
+        // intentionally don't bump: there's no proof a specific identity
+        // sent this message. The bump is in-memory; next vault save flushes.
+        if (senderId && result.isSignatureVerified) {
+          vault.bumpContactKeyLastUsed(senderId);
+        }
         if (result.text !== undefined) {
           getActions().bridgeSetDecryptedText({ messageKey, text: result.text });
         }
       }
       // invalidSignature: known contact key failed to verify — someone with
       // the chat key forged a message. Don't surface the plaintext; leave
-      // the ciphertext visible so the user sees something is wrong.
+      // the ciphertext visible so MessageMeta's `isTelebridgeFailed` warning
+      // slot renders (it fires on any tb1 payload without decryptedByKey).
       // wrongKey / malformed: leave the ciphertext visible — the UI can
       // flag these separately once the lock-state indicator lands.
     } finally {
@@ -113,18 +123,25 @@ export function ensureDecryptedText(
 
 /**
  * Gate for one-shot consumers (copy-to-clipboard, share sheets) that snapshot
- * text at invocation time. Returns true when the message is plaintext or has
- * already been decrypted. Returns false on cache miss for a Telebridge
- * message, after kicking off a background decrypt — the caller should show a
- * retry notification and abort the copy so the user doesn't get ciphertext.
+ * text at invocation time. Returns 'ok' when the message is plaintext or
+ * has already been decrypted. Returns 'handshake' for tb1.pk / tb1.kx
+ * machine messages — they never decrypt, so emitting their wire bytes to
+ * the clipboard would leak handshake base64. Returns 'coldCiphertext' on
+ * cache miss for a regular tb1 payload, after kicking off a background
+ * decrypt; the caller should abort and show a retry notification.
  */
-export function ensureDecryptedBeforeCopy(message: ApiMessage): boolean {
+export type EnsureDecryptedResult = 'ok' | 'handshake' | 'coldCiphertext';
+
+export function ensureDecryptedBeforeCopy(message: ApiMessage): EnsureDecryptedResult {
   const rawText = message.content.text?.text;
-  if (!rawText || !isTelebridgeMessage(rawText)) return true;
+  if (!rawText || !isTelebridgeMessage(rawText)) return 'ok';
+  // Handshake payloads (tb1.pk / tb1.kx) have no plaintext form — blocking
+  // copy here prevents the user ending up with raw base64 handshake bytes.
+  if (isTelebridgeMachineMessage(rawText)) return 'handshake';
   const messageKey = getMessageKey(message);
-  if (getCachedDecryptedText(messageKey) !== undefined) return true;
+  if (getCachedDecryptedText(messageKey) !== undefined) return 'ok';
   ensureDecryptedText(message.chatId, messageKey, rawText, message.senderId);
-  return false;
+  return 'coldCiphertext';
 }
 
 /**

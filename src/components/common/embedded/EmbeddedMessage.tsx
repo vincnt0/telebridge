@@ -19,6 +19,7 @@ import {
 } from '../../../global/helpers';
 import { getMediaContentTypeDescription } from '../../../global/helpers/messageSummary';
 import { getPeerTitle } from '../../../global/helpers/peers';
+import { isTelebridgeMachineMessage } from '../../../telebridge/protocol';
 import buildClassName from '../../../util/buildClassName';
 import { formatScheduledDateTime } from '../../../util/dates/oldDateFormat';
 import { isUserId } from '../../../util/entities/ids';
@@ -187,6 +188,15 @@ const EmbeddedMessage = ({
     }
 
     if (replyInfo?.type === 'message' && replyInfo.quoteText) {
+      // Telebridge: a reply that quotes a tb1.pk/tb1.kx handshake would
+      // otherwise paint raw base64 into the quote bubble. Swap in a label
+      // matching the chat-list / pinned preview treatment.
+      if (isTelebridgeMachineMessage(replyInfo.quoteText.text)) {
+        const labelKey = replyInfo.quoteText.text.startsWith('tb1.pk.')
+          ? 'BridgePreviewPrekey'
+          : 'BridgePreviewKeyExchange';
+        return <span>{lang(labelKey)}</span>;
+      }
       return renderTextWithEntities({
         text: replyInfo.quoteText.text,
         entities: replyInfo.quoteText.entities,

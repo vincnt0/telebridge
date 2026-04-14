@@ -24,8 +24,16 @@ export interface KeyExchangeResponseOk {
   keyId: string;
   /** Sender's Ed25519 public key (identity) */
   senderPublicKey: Uint8Array;
-  /** TOFU status: 'new' = first contact, 'changed' = key changed, 'unchanged' = same key */
-  tofuStatus: 'new' | 'changed' | 'unchanged';
+  /**
+   * TOFU status on the `ok` branch is always `'unchanged'`: the strict
+   * byte-equality gate (see `respond.ts` step 3, race-to-pin fix in
+   * db101a508) requires the wire-embedded sender key to match the caller's
+   * pinned key before any derivation happens, which in turn means the
+   * subsequent `storeContactKey` hits the active-entry path. `'new'` and
+   * `'changed'` outcomes can only originate from other vault paths
+   * (prekey publication, in-person scan).
+   */
+  tofuStatus: 'unchanged';
 }
 
 /**
