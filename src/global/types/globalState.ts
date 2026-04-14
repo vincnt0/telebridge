@@ -118,6 +118,27 @@ export type BridgeState = {
   kxInProgressChatIds: Record<string, true>;
   /** TOFU status from the last contact-key store, keyed by contact (user) ID. Runtime-only. */
   contactTofuStatusByContactId: Record<string, 'new' | 'changed' | 'unchanged' | 'verified'>;
+  /**
+   * Single-slot signal for an in-person scan that needs user confirmation
+   * (mismatch: archived-hit or new-key-added-inactive). Runtime-only; the
+   * mismatch dialog reads and clears it. Newest wins — replaces any
+   * previously-pending mismatch.
+   */
+  bridgeMismatchPending?: {
+    peerUserId: string;
+    scannedKeyId: string;
+    kind: 'matchedArchived' | 'newKeyAddedInactive';
+  };
+  /**
+   * Transient slot populated by `bridgeExportContactKey`. The export modal
+   * reads these values and fires `bridgeClearLastExport` when dismissed.
+   */
+  bridgeLastExport?: {
+    peerUserId: string;
+    keyId: string;
+    json: string;
+    qrText: string;
+  };
 };
 
 export type GlobalState = {

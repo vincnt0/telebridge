@@ -2106,6 +2106,10 @@ export interface LangPair {
   'BridgeKeyChangedBadge': undefined;
   'BridgeNoContactKey': undefined;
   'BridgeIdentityMismatch': undefined;
+  'BridgeInvalidScanBundle': undefined;
+  'BridgeScanMatchedArchived': undefined;
+  'BridgeImportDuplicate': undefined;
+  'BridgeImportInvalid': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -3663,6 +3667,15 @@ export interface LangPairWithVariables<V = LangVariable> {
   'RankEditText': {
     'user': V;
   };
+  'BridgeScanFresh': {
+    'name': V;
+  };
+  'BridgeScanMatchedActive': {
+    'name': V;
+  };
+  'BridgeScanNewKeyInactive': {
+    'name': V;
+  };
 }
 
 export interface LangPairPlural {
@@ -4135,6 +4148,15 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
   };
   'BridgeChatKeysCount': {
     'count': V;
+  };
+  'BridgeScanFresh': {
+    'name': V;
+  };
+  'BridgeScanMatchedActive': {
+    'name': V;
+  };
+  'BridgeScanNewKeyInactive': {
+    'name': V;
   };
 }
 export type RegularLangKey = keyof LangPair;

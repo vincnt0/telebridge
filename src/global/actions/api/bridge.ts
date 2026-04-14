@@ -18,6 +18,12 @@
 import type { ActionReturnType, GlobalState } from '../../types';
 
 import { concatBytes, ed25519Sign } from '../../../telebridge/crypto';
+import {
+  decodeIdentityBundle,
+  InvalidBundleError,
+  InvalidSignatureError as InvalidBundleSignatureError,
+  verifyIdentityBundle,
+} from '../../../telebridge/inPerson/bundle';
 import { initiateKeyExchange, respondToKeyExchange } from '../../../telebridge/keyExchange';
 import { ContactTrustLevel } from '../../../telebridge/state/types';
 import { decodePrekeyPublication } from '../../../telebridge/protocol/decode';
@@ -192,6 +198,8 @@ addActionHandler('bridgeLock', async (global): Promise<void> => {
       decryptedByKey: {},
       isBusy: false,
       lastError: undefined,
+      bridgeMismatchPending: undefined,
+      bridgeLastExport: undefined,
     },
   });
 });
@@ -563,6 +571,265 @@ addActionHandler('bridgeVerifyContact', (global, actions, payload): ActionReturn
   } catch (err) {
     return setError(global, err);
   }
+});
+
+// ---------------------------------------------------------------------------
+// In-person scan + contact-key archive management (§6.1.5)
+// ---------------------------------------------------------------------------
+
+addActionHandler('bridgeApplyInPersonScan', async (global, actions, payload): Promise<void> => {
+  const { peerUserId, bundleText } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+
+    let decoded;
+    try {
+      decoded = decodeIdentityBundle(bundleText);
+      verifyIdentityBundle(decoded);
+    } catch (err) {
+      if (err instanceof InvalidBundleError || err instanceof InvalidBundleSignatureError) {
+        global = getGlobal();
+        setGlobal({
+          ...global,
+          bridge: { ...global.bridge, lastError: 'BridgeInvalidScanBundle' },
+        });
+        return;
+      }
+      throw err;
+    }
+
+    const result = vault.storeContactKeyFromScan(
+      peerUserId,
+      decoded.ed25519PublicKey,
+      decoded.x25519PublicKey,
+      decoded.signature,
+    );
+    const persistedJson = vault.toPersistable();
+
+    global = getGlobal();
+    const nextContactTofu = { ...global.bridge.contactTofuStatusByContactId };
+    if (result.kind === 'fresh' || result.kind === 'matchedActive') {
+      nextContactTofu[peerUserId] = 'verified';
+    }
+
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        contactKeyIds: {
+          ...global.bridge.contactKeyIds,
+          [peerUserId]: true,
+        },
+        contactTofuStatusByContactId: nextContactTofu,
+        bridgeMismatchPending: result.needsUserConfirmation
+          ? { peerUserId, scannedKeyId: result.keyId, kind: result.kind }
+          : global.bridge.bridgeMismatchPending,
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeSetActiveContactKey', (global, actions, payload): ActionReturnType => {
+  const { peerUserId, keyId } = payload;
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+
+    vault.setActiveKey(peerUserId, keyId);
+    const persistedJson = vault.toPersistable();
+    const record = vault.getContactKey(peerUserId);
+    const tofuStatus = record?.trustLevel === ContactTrustLevel.Verified
+      ? 'verified'
+      : record?.trustLevel === ContactTrustLevel.Changed
+        ? 'changed'
+        : 'unchanged';
+
+    return {
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        contactTofuStatusByContactId: {
+          ...global.bridge.contactTofuStatusByContactId,
+          [peerUserId]: tofuStatus,
+        },
+      },
+    };
+  } catch (err) {
+    return setError(global, err);
+  }
+});
+
+addActionHandler('bridgeArchiveContactKey', (global, actions, payload): ActionReturnType => {
+  const { peerUserId, keyId } = payload;
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    vault.archiveKey(peerUserId, keyId);
+    const persistedJson = vault.toPersistable();
+    return {
+      ...global,
+      bridge: { ...global.bridge, persistedJson },
+    };
+  } catch (err) {
+    return setError(global, err);
+  }
+});
+
+addActionHandler('bridgeDeleteContactKey', (global, actions, payload): ActionReturnType => {
+  const { peerUserId, keyId } = payload;
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    const result = vault.deleteKey(peerUserId, keyId);
+    const persistedJson = vault.toPersistable();
+
+    const nextContactKeyIds = { ...global.bridge.contactKeyIds };
+    const nextTofu = { ...global.bridge.contactTofuStatusByContactId };
+    if (result.contactRemoved) {
+      delete nextContactKeyIds[peerUserId];
+      delete nextTofu[peerUserId];
+    } else {
+      const record = getTelebridgeVault().getContactKey(peerUserId);
+      if (record) {
+        nextTofu[peerUserId] = record.trustLevel === ContactTrustLevel.Verified
+          ? 'verified'
+          : record.trustLevel === ContactTrustLevel.Changed
+            ? 'changed'
+            : 'unchanged';
+      }
+    }
+
+    return {
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        contactKeyIds: nextContactKeyIds,
+        contactTofuStatusByContactId: nextTofu,
+      },
+    };
+  } catch (err) {
+    return setError(global, err);
+  }
+});
+
+addActionHandler('bridgeExportContactKey', (global, actions, payload): ActionReturnType => {
+  const { peerUserId, keyId } = payload;
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    const { json, qrText } = vault.exportKey(peerUserId, keyId);
+    return {
+      ...global,
+      bridge: {
+        ...global.bridge,
+        bridgeLastExport: { peerUserId, keyId, json, qrText },
+      },
+    };
+  } catch (err) {
+    return setError(global, err);
+  }
+});
+
+addActionHandler('bridgeImportContactKey', async (global, actions, payload): Promise<void> => {
+  const { peerUserId, payload: blob } = payload;
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    const result = vault.importKey(peerUserId, blob);
+    const persistedJson = vault.toPersistable();
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        lastError: result.kind === 'duplicate' ? 'BridgeImportDuplicate' : undefined,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error && err.message === 'Import signature invalid'
+      ? 'BridgeImportInvalid'
+      : err instanceof Error ? err.message : 'Bridge operation failed';
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: { ...global.bridge, isBusy: false, lastError: message },
+    });
+  }
+});
+
+addActionHandler('bridgeRevokeContactKey', async (global, actions, payload): Promise<void> => {
+  const { peerUserId } = payload;
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    const { droppedChatIds } = vault.revokeContactKey(peerUserId);
+    const persistedJson = vault.toPersistable();
+
+    global = getGlobal();
+    const nextChatKeyIds = { ...global.bridge.chatKeyIds };
+    const nextPrekeyPublished = { ...global.bridge.prekeyPublishedChatIds };
+    for (const chatId of droppedChatIds) {
+      delete nextChatKeyIds[chatId];
+      delete nextPrekeyPublished[chatId];
+    }
+    const nextContactKeyIds = { ...global.bridge.contactKeyIds };
+    delete nextContactKeyIds[peerUserId];
+    const nextTofu = { ...global.bridge.contactTofuStatusByContactId };
+    delete nextTofu[peerUserId];
+
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        chatKeyIds: nextChatKeyIds,
+        prekeyPublishedChatIds: nextPrekeyPublished,
+        contactKeyIds: nextContactKeyIds,
+        contactTofuStatusByContactId: nextTofu,
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeClearMismatchPending', (global): ActionReturnType => {
+  if (!global.bridge.bridgeMismatchPending) return undefined;
+  return {
+    ...global,
+    bridge: { ...global.bridge, bridgeMismatchPending: undefined },
+  };
+});
+
+addActionHandler('bridgeClearLastExport', (global): ActionReturnType => {
+  if (!global.bridge.bridgeLastExport) return undefined;
+  return {
+    ...global,
+    bridge: { ...global.bridge, bridgeLastExport: undefined },
+  };
 });
 
 // ---------------------------------------------------------------------------

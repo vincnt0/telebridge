@@ -3163,6 +3163,35 @@ export interface ActionPayloads {
     contactId: string;
   };
   bridgeClearError: undefined;
+  bridgeApplyInPersonScan: {
+    peerUserId: string;
+    bundleText: string;
+  };
+  bridgeSetActiveContactKey: {
+    peerUserId: string;
+    keyId: string;
+  };
+  bridgeArchiveContactKey: {
+    peerUserId: string;
+    keyId: string;
+  };
+  bridgeDeleteContactKey: {
+    peerUserId: string;
+    keyId: string;
+  };
+  bridgeExportContactKey: {
+    peerUserId: string;
+    keyId: string;
+  };
+  bridgeImportContactKey: {
+    peerUserId: string;
+    payload: string;
+  };
+  bridgeRevokeContactKey: {
+    peerUserId: string;
+  };
+  bridgeClearMismatchPending: undefined;
+  bridgeClearLastExport: undefined;
 }
 
 export interface RequiredActionPayloads {
