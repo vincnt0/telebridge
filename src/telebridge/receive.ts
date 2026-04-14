@@ -46,6 +46,16 @@ const kxProcessed = new Set<string>();     // messageKey
 const asymmetricProcessed = new Set<string>(); // messageKey
 
 /**
+ * Drop the per-session triage caches. Called on `bridgeLock` so a subsequent
+ * unlock starts from a clean slate — envelopes whose triage outcome depended
+ * on (now-dropped) vault state get a chance to re-run after the user unlocks
+ * or pins a new contact key.
+ */
+export function resetAsymmetricReceive(): void {
+  asymmetricProcessed.clear();
+}
+
+/**
  * Synchronous probe for the render path. Returns the plaintext if the
  * background decrypt has already resolved, otherwise undefined.
  */

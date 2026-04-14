@@ -2115,6 +2115,7 @@ export interface LangPair {
   'BridgeImportInvalid': undefined;
   'BridgeSendSecuredNoPeerKey': undefined;
   'BridgeSendSecuredMenuItem': undefined;
+  'BridgeSendSecuredNotDm': undefined;
   'BridgeContactsSectionTitle': undefined;
   'BridgeContactsEmpty': undefined;
   'BridgeContactKeyOriginTofu': undefined;

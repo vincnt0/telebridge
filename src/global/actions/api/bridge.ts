@@ -35,7 +35,7 @@ import { ContactTrustLevel } from '../../../telebridge/state/types';
 import { decodePrekeyPublication } from '../../../telebridge/protocol/decode';
 import { encodePrekeyPublication, encodeSecuredMessage } from '../../../telebridge/protocol/encode';
 import { InvalidSignatureError, verifyPrekeyBundle } from '../../../telebridge/protocol/verify';
-import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
+import { backfillDecryptsForAllChats, resetAsymmetricReceive } from '../../../telebridge/receive';
 import { getTelebridgeVault } from '../../../telebridge/send';
 import { MAIN_THREAD_ID } from '../../../api/types/messages';
 import { isUserId } from '../../../util/entities/ids';
@@ -191,9 +191,10 @@ addActionHandler('bridgeLock', async (global): Promise<void> => {
 
   getTelebridgeVault().lock();
 
-  // Queued kx pointers are only meaningful while unlocked — drop them so a
-  // subsequent unlock starts from a clean slate.
+  // Queued kx pointers + asymmetric-triage cache are only meaningful while
+  // unlocked — drop them so a subsequent unlock starts from a clean slate.
   pendingKxBySenderId.clear();
+  resetAsymmetricReceive();
 
   global = getGlobal();
   setGlobal({
@@ -203,6 +204,11 @@ addActionHandler('bridgeLock', async (global): Promise<void> => {
       isUnlocked: false,
       chatKeyIds: {},
       decryptedByKey: {},
+      // Layer-4 tracking maps reference messages whose plaintext lived in
+      // `decryptedByKey`; drop them together so the render side doesn't apply
+      // `is-bridge-secured` styling to a bubble that can no longer be decoded.
+      asymmetricDecryptedMessageIds: {},
+      filteredAsymmetricMessageIds: {},
       isBusy: false,
       lastError: undefined,
       bridgeMismatchPending: undefined,
@@ -879,7 +885,14 @@ addActionHandler('bridgeSendSecured', async (global, actions, payload): Promise<
     }
     if (!isUserId(chatId)) {
       // Group Secured Messaging is deferred per ARCHITECTURE.md Layer 4.
-      throw new Error('Send Secured only supports 1:1 chats');
+      // Composer gates this out pre-dispatch, so this is belt-and-braces;
+      // surfaces a distinct error code for parity with the no-peer-key path.
+      global = getGlobal();
+      setGlobal({
+        ...global,
+        bridge: { ...global.bridge, lastError: 'BridgeSendSecuredNotDm' },
+      });
+      return;
     }
 
     // 1:1 chats: recipient user id === chat id.
@@ -892,6 +905,16 @@ addActionHandler('bridgeSendSecured', async (global, actions, payload): Promise<
         bridge: { ...global.bridge, lastError: 'BridgeSendSecuredNoPeerKey' },
       });
       return;
+    }
+
+    // Success path from here on — clear any stale error from a prior failed
+    // dispatch so the composer doesn't re-emit it after the next mount.
+    if (global.bridge.lastError) {
+      global = getGlobal();
+      setGlobal({
+        ...global,
+        bridge: { ...global.bridge, lastError: undefined },
+      });
     }
 
     const recipientX25519 = fromBase64(recipientContact.x25519PublicKey);

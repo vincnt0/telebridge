@@ -1992,11 +1992,14 @@ const Composer = ({
   });
 
   useEffect(() => {
-    if (bridgeLastError !== 'BridgeSendSecuredNoPeerKey') return;
+    if (
+      bridgeLastError !== 'BridgeSendSecuredNoPeerKey'
+      && bridgeLastError !== 'BridgeSendSecuredNotDm'
+    ) return;
     showNotification({
-      localId: 'bridgeSendSecuredNoPeerKey',
+      localId: `bridgeSendSecured_${bridgeLastError}`,
       icon: 'lock',
-      message: lang('BridgeSendSecuredNoPeerKey'),
+      message: lang(bridgeLastError),
     });
     bridgeClearError();
   }, [bridgeLastError, lang]);
