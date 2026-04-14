@@ -15,21 +15,49 @@ export enum ContactTrustLevel {
   Verified = 'verified',
 }
 
-/** Historical record of a contact's key change */
-export interface ContactKeyHistoryEntry {
-  ed25519PublicKey: string; // base64
-  x25519PublicKey: string; // base64
-  seenAt: number; // timestamp ms
+/** Provenance of a contact-key entry */
+export type ContactKeyOrigin =
+  /** First-seen via Telegram-borne tb1.pk, no explicit verification */
+  | 'tofu'
+  /** Established via in-person camera QR scan */
+  | 'in-person-scan'
+  /** Established via pair-fingerprint QR + safety-number compare */
+  | 'post-hoc-qr'
+  /** User pasted/uploaded a key entry from export */
+  | 'imported';
+
+/** A single per-contact key binding in the key archive */
+export interface ContactKeyEntry {
+  /** First 8 bytes of SHA-256(ed25519PublicKey), hex (16 chars) */
+  keyId: string;
+  /** Base64, 32 raw bytes */
+  ed25519PublicKey: string;
+  /** Base64, 32 raw bytes — prekey associated with this identity */
+  x25519PublicKey: string;
+  /** Provenance of this entry */
+  origin: ContactKeyOrigin;
+  /** Timestamp ms, when entry was appended */
+  firstSeen: number;
+  /** Timestamp ms, most recent successful KX or message-sig verify */
+  lastUsed?: number;
+  /** Timestamp ms, set when entry transitions off activeKeyId */
+  archivedAt?: number;
+  /** Optional user-supplied note */
+  label?: string;
 }
 
-/** Per-contact public key record with TOFU tracking */
+/** Per-contact public key record with TOFU tracking and key archive */
 export interface ContactRecord {
-  ed25519PublicKey: string; // base64
-  x25519PublicKey: string; // base64
+  /** Telegram user id the archive is scoped to */
+  userId: string;
+  /** Invariant: keys.length ≥ 1 */
+  keys: ContactKeyEntry[];
+  /** Invariant: keys.some(k => k.keyId === activeKeyId) */
+  activeKeyId: string;
+  /** Top-level trust level (mirrors active entry's provenance in the UI) */
   trustLevel: ContactTrustLevel;
-  firstSeen: number; // timestamp ms
-  verifiedAt?: number; // timestamp ms, set when manually verified
-  keyHistory: ContactKeyHistoryEntry[];
+  /** Timestamp ms, derived from keys[0].firstSeen at creation */
+  firstSeen: number;
 }
 
 /** Per-chat key metadata */
@@ -50,6 +78,8 @@ export interface ChatKeyRecord {
   previousKeyId?: string;
   /** Number of messages encrypted with this key (for rotation tracking) */
   messageCount: number;
+  /** ContactKeyEntry.keyId this session was negotiated against */
+  derivedFromKeyId: string;
 }
 
 /** Identity keypair — public keys always available, private keys only when unlocked */
@@ -86,7 +116,7 @@ export interface PersistedState {
   identity?: IdentityKeys;
   /** Per-chat encrypted keys */
   chatKeys: Record<string, ChatKeyRecord>;
-  /** Known contacts with TOFU tracking */
+  /** Known contacts with TOFU tracking and per-contact key archive */
   contacts: Record<string, ContactRecord>;
   /** Key rotation configuration */
   rotationConfig?: { maxMessages: number; maxDays: number };
@@ -136,5 +166,10 @@ export const PLAINTEXT_FIELD_NAMES = [
   'plaintext',
 ] as const;
 
-/** Current persisted state format version */
-export const CURRENT_FORMAT_VERSION = 1;
+/**
+ * Current persisted state format version.
+ *
+ * - v1: single-key ContactRecord with { ed25519PublicKey, x25519PublicKey, keyHistory[] }.
+ * - v2: per-contact key archive with { keys: ContactKeyEntry[], activeKeyId }; ChatKeyRecord gains derivedFromKeyId.
+ */
+export const CURRENT_FORMAT_VERSION = 2;

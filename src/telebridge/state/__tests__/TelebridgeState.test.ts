@@ -346,7 +346,7 @@ describe('TelebridgeState', () => {
       expect(contact!.trustLevel).toBe(ContactTrustLevel.Initial);
     });
 
-    it('should flag key change and preserve history', async () => {
+    it('should flag key change and archive the new key (no overwrite of active)', async () => {
       const state = new TelebridgeState();
       await state.initialize(TEST_PASSWORD);
 
@@ -354,7 +354,7 @@ describe('TelebridgeState', () => {
       const firstX25519 = randomBytes(32);
       state.storeContactKey('user-2', firstKey, firstX25519);
 
-      // Change key
+      // Change key — the new shape appends-as-inactive rather than overwriting.
       const secondKey = randomBytes(32);
       const secondX25519 = randomBytes(32);
       const result = state.storeContactKey('user-2', secondKey, secondX25519);
@@ -363,8 +363,13 @@ describe('TelebridgeState', () => {
 
       const contact = state.getContactKey('user-2');
       expect(contact!.trustLevel).toBe(ContactTrustLevel.Changed);
-      expect(contact!.keyHistory.length).toBe(1);
-      expect(contact!.keyHistory[0].ed25519PublicKey).toBe(toBase64(firstKey));
+      // Active key remains the original; new key appended as archived.
+      expect(contact!.ed25519PublicKey).toBe(toBase64(firstKey));
+      expect(contact!.keys.length).toBe(2);
+      const archived = contact!.keys.find((k) => k.keyId !== contact!.activeKeyId);
+      expect(archived).toBeDefined();
+      expect(archived!.ed25519PublicKey).toBe(toBase64(secondKey));
+      expect(archived!.archivedAt).toBeDefined();
     });
 
     it('should return unchanged for same key', async () => {

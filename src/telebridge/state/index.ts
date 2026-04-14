@@ -10,7 +10,8 @@ export { TelebridgeState } from './TelebridgeState';
 // Types
 export type {
   ChatKeyRecord,
-  ContactKeyHistoryEntry,
+  ContactKeyEntry,
+  ContactKeyOrigin,
   ContactRecord,
   DecryptedChatKey,
   DecryptedIdentity,

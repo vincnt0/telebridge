@@ -40,13 +40,13 @@ import {
 } from '../crypto';
 import type { EncryptedPayload } from '../crypto';
 
-import { serialize, deserialize, createEmptyPersistedState } from './serialization';
+import { serialize, deserialize, createEmptyPersistedState, deriveKeyId } from './serialization';
 import type {
   PersistedState,
   DecryptedIdentity,
   DecryptedChatKey,
+  ContactKeyEntry,
   ContactRecord,
-  ChatKeyRecord,
   RotationInfo,
 } from './types';
 import {
@@ -469,6 +469,12 @@ export class TelebridgeState {
     // Encrypt the key for persistence
     const encryptedKey = await aesEncrypt(key, this.derivedKey!);
 
+    // Stamp the chat-key entry with the contact's active keyId at negotiation
+    // time. 1:1 chats use chatId === peer user id; group chats and chats
+    // without a contact record get an empty string (orphan — §3.5).
+    const contact = this.persisted.contacts[chatId];
+    const derivedFromKeyId = contact ? contact.activeKeyId : '';
+
     // Store in persisted state
     this.persisted.chatKeys[chatId] = {
       encryptedKey: encodeEncryptedPayload(encryptedKey),
@@ -477,6 +483,7 @@ export class TelebridgeState {
       rotationVersion: 0,
       lastRotatedAt: now,
       messageCount: 0,
+      derivedFromKeyId,
     };
 
     // Store in memory
@@ -548,6 +555,14 @@ export class TelebridgeState {
     // Encrypt previous key (for migration window)
     const encryptedPreviousKey = await aesEncrypt(existing.key, this.derivedKey!);
 
+    // Preserve the contact-key binding across rotations (the rotation keeps
+    // the same peer identity — only the session key is refreshed). Fall back
+    // to the contact's current activeKeyId if the pre-rotation record didn't
+    // carry a stamp (legacy blob migrated in-place with no matching contact).
+    const priorRecord = this.persisted.chatKeys[chatId];
+    const contact = this.persisted.contacts[chatId];
+    const derivedFromKeyId = priorRecord?.derivedFromKeyId || (contact ? contact.activeKeyId : '');
+
     // Update persisted state
     this.persisted.chatKeys[chatId] = {
       encryptedKey: encodeEncryptedPayload(encryptedNewKey),
@@ -558,6 +573,7 @@ export class TelebridgeState {
       previousEncryptedKey: encodeEncryptedPayload(encryptedPreviousKey),
       previousKeyId: existing.keyId,
       messageCount: 0,
+      derivedFromKeyId,
     };
 
     // Update in-memory state
@@ -657,7 +673,9 @@ export class TelebridgeState {
   getContactX25519PublicKey(contactId: string): Uint8Array | undefined {
     const record = this.persisted.contacts[contactId];
     if (!record) return undefined;
-    return fromBase64(record.x25519PublicKey);
+    const active = findActiveKey(record);
+    if (!active) return undefined;
+    return fromBase64(active.x25519PublicKey);
   }
 
   // ---------------------------------------------------------------------------
@@ -683,57 +701,101 @@ export class TelebridgeState {
     const existing = this.persisted.contacts[contactId];
     const ed25519Base64 = toBase64(ed25519PublicKey);
     const x25519Base64 = toBase64(x25519PublicKey);
+    const keyId = deriveKeyId(ed25519Base64);
+    const now = Date.now();
 
     if (!existing) {
-      // First encounter — TOFU accept
-      this.persisted.contacts[contactId] = {
+      // First encounter — TOFU accept, single-entry archive.
+      const entry: ContactKeyEntry = {
+        keyId,
         ed25519PublicKey: ed25519Base64,
         x25519PublicKey: x25519Base64,
+        origin: 'tofu',
+        firstSeen: now,
+        lastUsed: now,
+      };
+      this.persisted.contacts[contactId] = {
+        userId: contactId,
+        keys: [entry],
+        activeKeyId: keyId,
         trustLevel: ContactTrustLevel.Initial,
-        firstSeen: Date.now(),
-        keyHistory: [],
+        firstSeen: now,
       };
       return { status: 'new' };
     }
 
-    // Check if key changed
-    if (existing.ed25519PublicKey === ed25519Base64 && existing.x25519PublicKey === x25519Base64) {
+    // Existing archive — look up the entry that matches the wire key by
+    // content-addressable id. Don't key on x25519 alone: the identity key
+    // is what pins the contact.
+    const matching = existing.keys.find((k) => k.keyId === keyId);
+    if (matching && matching.keyId === existing.activeKeyId) {
+      // Wire matches the active entry — record last-used, keep x25519 fresh
+      // (the prekey can legitimately rotate under the same identity key).
+      matching.lastUsed = now;
+      if (matching.x25519PublicKey !== x25519Base64) {
+        matching.x25519PublicKey = x25519Base64;
+      }
       return { status: 'unchanged' };
     }
 
-    // Key changed — push old key to history, flag as Changed
-    existing.keyHistory.push({
-      ed25519PublicKey: existing.ed25519PublicKey,
-      x25519PublicKey: existing.x25519PublicKey,
-      seenAt: Date.now(),
-    });
-
-    existing.ed25519PublicKey = ed25519Base64;
-    existing.x25519PublicKey = x25519Base64;
+    // Key doesn't match the active entry. Per §3c we NEVER overwrite: append
+    // the new key to the archive as inactive (archivedAt stamped, activeKeyId
+    // unchanged). Flip trustLevel to Changed so the UI can banner the user.
+    if (!matching) {
+      existing.keys.push({
+        keyId,
+        ed25519PublicKey: ed25519Base64,
+        x25519PublicKey: x25519Base64,
+        origin: 'tofu',
+        firstSeen: now,
+        lastUsed: now,
+        archivedAt: now,
+      });
+    } else {
+      // We've seen this key before (archived). Bump lastUsed but leave it
+      // archived — the action layer decides whether to promote.
+      matching.lastUsed = now;
+    }
     existing.trustLevel = ContactTrustLevel.Changed;
-    existing.verifiedAt = undefined;
 
     return { status: 'changed' };
   }
 
   /**
-   * Get a contact's public key and trust status.
+   * Get a contact's active public key and trust status.
+   *
+   * Back-compat shape: returns the active ContactKeyEntry's bytes hoisted to
+   * the top level under the legacy field names so existing callers keep
+   * working. The per-contact key archive is accessible via `.keys` /
+   * `.activeKeyId` on the same object.
    *
    * @param contactId - Telegram user ID
-   * @returns Contact record or undefined if not known
+   * @returns Flat-shape record or undefined if not known
    */
-  getContactKey(contactId: string): (ContactRecord & { publicKey: Uint8Array }) | undefined {
+  getContactKey(contactId: string): (ContactRecord & {
+    ed25519PublicKey: string;
+    x25519PublicKey: string;
+    verifiedAt?: number;
+    publicKey: Uint8Array;
+  }) | undefined {
     const record = this.persisted.contacts[contactId];
     if (!record) return undefined;
+    const active = findActiveKey(record);
+    if (!active) return undefined;
 
+    const verifiedAt = record.trustLevel === ContactTrustLevel.Verified ? active.lastUsed : undefined;
     return {
       ...record,
-      publicKey: fromBase64(record.ed25519PublicKey),
+      ed25519PublicKey: active.ed25519PublicKey,
+      x25519PublicKey: active.x25519PublicKey,
+      verifiedAt,
+      publicKey: fromBase64(active.ed25519PublicKey),
     };
   }
 
   /**
-   * Mark a contact key as manually verified.
+   * Mark a contact's active key as manually verified (post-hoc QR flow).
+   * Lifts trust to Verified and tags the active entry's origin.
    *
    * @param contactId - Telegram user ID
    */
@@ -742,8 +804,13 @@ export class TelebridgeState {
     if (!record) {
       throw new Error(`Unknown contact: ${contactId}`);
     }
+    const active = findActiveKey(record);
+    if (!active) {
+      throw new Error(`Contact ${contactId} has no active key`);
+    }
     record.trustLevel = ContactTrustLevel.Verified;
-    record.verifiedAt = Date.now();
+    active.origin = 'post-hoc-qr';
+    active.lastUsed = Date.now();
   }
 
   // ---------------------------------------------------------------------------
@@ -781,4 +848,9 @@ export class TelebridgeState {
 /** Convert 4 random bytes to a hex key ID string */
 function toHexId(bytes: Uint8Array): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Resolve a ContactRecord's active key entry. Returns undefined if archive invariant is broken. */
+function findActiveKey(record: ContactRecord): ContactKeyEntry | undefined {
+  return record.keys.find((k) => k.keyId === record.activeKeyId);
 }
