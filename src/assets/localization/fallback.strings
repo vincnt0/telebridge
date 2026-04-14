@@ -2831,6 +2831,11 @@
 "BridgePasswordMismatch" = "Passwords don't match.";
 "BridgePasswordTooShort" = "Password must be at least 8 characters.";
 "BridgeWrongPassword" = "Incorrect password.";
+"BridgeSkipPasswordButton" = "Continue without password";
+"BridgePasswordOptionalNote" = "Leaving this empty stores your keys on this device without encryption at rest. Anyone with access to this browser profile can read them.";
+"BridgeNoPasswordSetupDialogText" = "Your chat keys and identity will be stored on this device. A password is optional — with one, they are encrypted at rest.";
+"BridgeSubmitSkipPassword" = "Continue without password";
+"BridgeUnlockNoPasswordNote" = "No password is set on this vault. Unlock to continue.";
 "BridgeWaitingForContactPrekey" = "Waiting for your contact's encryption key. They need to enable Bridge encryption too.";
 "BridgeStartEncryptedChatButton" = "Start Encrypted Chat";
 "BridgeStartEncryptedChatDescription" = "Enable end-to-end encrypted messaging with this contact.";

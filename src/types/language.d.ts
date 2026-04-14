@@ -2083,6 +2083,11 @@ export interface LangPair {
   'BridgePasswordMismatch': undefined;
   'BridgePasswordTooShort': undefined;
   'BridgeWrongPassword': undefined;
+  'BridgeSkipPasswordButton': undefined;
+  'BridgePasswordOptionalNote': undefined;
+  'BridgeNoPasswordSetupDialogText': undefined;
+  'BridgeSubmitSkipPassword': undefined;
+  'BridgeUnlockNoPasswordNote': undefined;
   'BridgeWaitingForContactPrekey': undefined;
   'BridgeStartEncryptedChatButton': undefined;
   'BridgeStartEncryptedChatDescription': undefined;
