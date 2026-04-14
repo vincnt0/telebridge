@@ -17,11 +17,12 @@
 
 import type { ActionReturnType, GlobalState } from '../../types';
 
-import { concatBytes, ed25519Sign, ed25519Verify } from '../../../telebridge/crypto';
+import { concatBytes, ed25519Sign } from '../../../telebridge/crypto';
 import { initiateKeyExchange, respondToKeyExchange } from '../../../telebridge/keyExchange';
 import { ContactTrustLevel } from '../../../telebridge/state/types';
 import { decodePrekeyPublication } from '../../../telebridge/protocol/decode';
 import { encodePrekeyPublication } from '../../../telebridge/protocol/encode';
+import { InvalidSignatureError, verifyPrekeyBundle } from '../../../telebridge/protocol/verify';
 import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
 import { getTelebridgeVault } from '../../../telebridge/send';
 import { isUserId } from '../../../util/entities/ids';
@@ -308,8 +309,13 @@ addActionHandler('bridgeStoreContactPrekey', async (global, actions, payload): P
     // Layer 1). Drop silently on failure so a malformed/forged tb1.pk in a
     // high-volume receive cycle never banners the user or breaks the router.
     const signable = concatBytes(decoded.ed25519PublicKey, decoded.x25519PublicKey);
-    if (!ed25519Verify(signable, decoded.signature, decoded.ed25519PublicKey)) {
-      return;
+    try {
+      verifyPrekeyBundle(signable, decoded.signature, decoded.ed25519PublicKey);
+    } catch (verifyErr) {
+      if (verifyErr instanceof InvalidSignatureError) {
+        return;
+      }
+      throw verifyErr;
     }
 
     const result = vault.storeContactKey(senderId, decoded.ed25519PublicKey, decoded.x25519PublicKey);
