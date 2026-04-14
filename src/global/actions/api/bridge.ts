@@ -19,6 +19,7 @@ import type { ActionReturnType, GlobalState } from '../../types';
 
 import { concatBytes, ed25519Sign, ed25519Verify } from '../../../telebridge/crypto';
 import { initiateKeyExchange, respondToKeyExchange } from '../../../telebridge/keyExchange';
+import { ContactTrustLevel } from '../../../telebridge/state/types';
 import { decodePrekeyPublication } from '../../../telebridge/protocol/decode';
 import { encodePrekeyPublication } from '../../../telebridge/protocol/encode';
 import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
@@ -116,9 +117,23 @@ addActionHandler('bridgeUnlock', async (global, actions, payload): Promise<void>
 
     // Rebuild chatKeyIds from persisted state — keys are already decrypted
     // in memory, but we only surface the set of chatIds, never the bytes.
+    const persisted = vault.getPersistedState();
     const chatKeyIds: Record<string, true> = {};
-    for (const chatId of Object.keys(vault.getPersistedState().chatKeys)) {
+    for (const chatId of Object.keys(persisted.chatKeys)) {
       chatKeyIds[chatId] = true;
+    }
+
+    // Rehydrate contact pinning + trust state from the vault. Without this,
+    // verified contacts surface as "Not verified" until a fresh tb1.pk arrives.
+    const contactKeyIds: Record<string, true> = {};
+    const contactTofuStatusByContactId: Record<string, 'new' | 'changed' | 'unchanged' | 'verified'> = {};
+    for (const [contactId, record] of Object.entries(persisted.contacts)) {
+      contactKeyIds[contactId] = true;
+      contactTofuStatusByContactId[contactId] = record.trustLevel === ContactTrustLevel.Verified
+        ? 'verified'
+        : record.trustLevel === ContactTrustLevel.Changed
+          ? 'changed'
+          : 'unchanged';
     }
 
     global = getGlobal();
@@ -128,6 +143,8 @@ addActionHandler('bridgeUnlock', async (global, actions, payload): Promise<void>
         ...global.bridge,
         isUnlocked: true,
         chatKeyIds,
+        contactKeyIds,
+        contactTofuStatusByContactId,
         decryptedByKey: {},
         isBusy: false,
         lastError: undefined,
