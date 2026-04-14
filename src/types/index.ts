@@ -412,7 +412,8 @@ export type ProfileTabType =
   | 'similarChannels'
   | 'similarBots'
   | 'dialogs'
-  | 'gifts';
+  | 'gifts'
+  | 'keys';
 export type SharedMediaType = 'media' | 'documents' | 'links' | 'audio' | 'voice' | 'gif';
 export type MiddleSearchType = 'chat' | 'myChats' | 'channels';
 export type MiddleSearchParams = {

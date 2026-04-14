@@ -124,6 +124,7 @@ import Transition from '../ui/Transition';
 import DeleteMemberModal from './DeleteMemberModal';
 import StarGiftCollectionList from './gifts/StarGiftCollectionList';
 import StoryAlbumList from './stories/StoryAlbumList';
+import ProfileKeysTab from './bridge/ProfileKeysTab';
 
 import './Profile.scss';
 
@@ -189,6 +190,7 @@ type StateProps = {
   peerFullInfo?: ApiUserFullInfo | ApiChatFullInfo;
   canUpdateMainTab?: boolean;
   canAutoPlayGifs?: boolean;
+  isBridgeUnlocked?: boolean;
 };
 
 type LocalTabProps = {
@@ -278,6 +280,7 @@ const Profile = ({
   peerFullInfo,
   canUpdateMainTab,
   canAutoPlayGifs,
+  isBridgeUnlocked,
   onProfileStateChange,
 }: OwnProps & StateProps) => {
   const {
@@ -377,6 +380,10 @@ const Profile = ({
       arr.push({ type: 'similarBots', key: 'ProfileTabSimilarBots' });
     }
 
+    if (isUser && !isOwnProfile && !isBot && !isSavedMessages && isBridgeUnlocked) {
+      arr.push({ type: 'keys', key: 'ProfileTabKeys' });
+    }
+
     // Fallback to prevent errors in edge cases
     // TODO: Handle no tabs case, skip shared media block
     if (!arr.length) {
@@ -411,7 +418,7 @@ const Profile = ({
   }, [
     isGeneralSavedMessages, hasStoriesTab, hasGiftsTab, hasMembersTab, hasPreviewMediaTab, isTopicInfo,
     hasCommonChatsTab, isChannel, isBot, similarChannels?.length, similarBots?.length, lang, isOwnProfile,
-    mainTab, chatId, canUpdateMainTab, validMainTabTypes,
+    mainTab, chatId, canUpdateMainTab, validMainTabTypes, isBridgeUnlocked, isUser, isSavedMessages,
   ]);
 
   const [allowAutoScrollToTabs, startAutoScrollToTabsIfNeeded, stopAutoScrollToTabs] = useFlag(false);
@@ -798,6 +805,10 @@ const Profile = ({
   }
 
   function renderContent() {
+    if (resultType === 'keys') {
+      return <ProfileKeysTab chatId={chatId} />;
+    }
+
     if (resultType === 'dialogs') {
       return (
         <ChatList className="saved-dialogs" folderType="saved" isActive />
@@ -1419,6 +1430,7 @@ export default memo(withGlobal<OwnProps>(
       peerFullInfo,
       canUpdateMainTab: selectCanUpdateMainTab(global, chatId),
       canAutoPlayGifs,
+      isBridgeUnlocked: global.bridge.isUnlocked,
     };
   },
 )(Profile));
