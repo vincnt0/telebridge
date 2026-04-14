@@ -28,6 +28,8 @@ import { x25519 } from '@noble/curves/ed25519.js';
 import {
   aesDecrypt,
   aesEncrypt,
+  ed25519Sign,
+  ed25519Verify,
   generateEd25519Keypair,
   hashPassword,
   randomBytes,
@@ -47,7 +49,10 @@ import type {
   DecryptedChatKey,
   ContactKeyEntry,
   ContactRecord,
+  ContactSummary,
+  ImportResult,
   RotationInfo,
+  ScanResult,
 } from './types';
 import {
   ContactTrustLevel,
@@ -814,6 +819,356 @@ export class TelebridgeState {
   }
 
   // ---------------------------------------------------------------------------
+  // In-person scan + key archive management (§6.1.4)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Apply an in-person QR scan to the contact archive. Per plan §3 case
+   * dispatcher. The caller must have already verified the bundle signature;
+   * this method only mutates the vault.
+   */
+  storeContactKeyFromScan(
+    userId: string,
+    ed25519PublicKey: Uint8Array,
+    x25519PublicKey: Uint8Array,
+    _signature: Uint8Array,
+  ): ScanResult {
+    const ed25519Base64 = toBase64(ed25519PublicKey);
+    const x25519Base64 = toBase64(x25519PublicKey);
+    const keyId = deriveKeyId(ed25519Base64);
+    const now = Date.now();
+
+    const existing = this.persisted.contacts[userId];
+    if (!existing) {
+      this.persisted.contacts[userId] = {
+        userId,
+        keys: [{
+          keyId,
+          ed25519PublicKey: ed25519Base64,
+          x25519PublicKey: x25519Base64,
+          origin: 'in-person-scan',
+          firstSeen: now,
+          lastUsed: now,
+        }],
+        activeKeyId: keyId,
+        trustLevel: ContactTrustLevel.Verified,
+        firstSeen: now,
+      };
+      return { kind: 'fresh', keyId, needsUserConfirmation: false };
+    }
+
+    const matching = existing.keys.find((k) => k.keyId === keyId);
+    if (matching && matching.keyId === existing.activeKeyId) {
+      matching.lastUsed = now;
+      if (matching.origin === 'tofu') {
+        matching.origin = 'in-person-scan';
+      }
+      existing.trustLevel = ContactTrustLevel.Verified;
+      return { kind: 'matchedActive', keyId, needsUserConfirmation: false };
+    }
+
+    if (matching) {
+      // Archived entry — bump lastUsed but don't auto-promote.
+      matching.lastUsed = now;
+      return { kind: 'matchedArchived', keyId, needsUserConfirmation: true };
+    }
+
+    // Brand-new key for an existing contact — append as inactive.
+    existing.keys.push({
+      keyId,
+      ed25519PublicKey: ed25519Base64,
+      x25519PublicKey: x25519Base64,
+      origin: 'in-person-scan',
+      firstSeen: now,
+      archivedAt: now,
+    });
+    return { kind: 'newKeyAddedInactive', keyId, needsUserConfirmation: true };
+  }
+
+  /**
+   * Promote an archived key to active. Archives the previous active key.
+   * No-op if the target is already active.
+   */
+  setActiveKey(userId: string, keyId: string): void {
+    const record = this.persisted.contacts[userId];
+    if (!record) {
+      throw new Error(`Unknown contact: ${userId}`);
+    }
+    const target = record.keys.find((k) => k.keyId === keyId);
+    if (!target) {
+      throw new Error(`Key ${keyId} not found on contact ${userId}`);
+    }
+    if (record.activeKeyId === keyId) return;
+
+    const now = Date.now();
+    const previousActive = record.keys.find((k) => k.keyId === record.activeKeyId);
+    if (previousActive) {
+      previousActive.archivedAt = now;
+    }
+    target.archivedAt = undefined;
+    record.activeKeyId = keyId;
+  }
+
+  /**
+   * Archive a non-active, non-sole key. Refuses the active key (use
+   * {@link setActiveKey} first) or the sole key (use {@link deleteKey} or
+   * {@link revokeContactKey} instead).
+   */
+  archiveKey(userId: string, keyId: string): void {
+    const record = this.persisted.contacts[userId];
+    if (!record) {
+      throw new Error(`Unknown contact: ${userId}`);
+    }
+    const target = record.keys.find((k) => k.keyId === keyId);
+    if (!target) {
+      throw new Error(`Key ${keyId} not found on contact ${userId}`);
+    }
+    if (record.keys.length === 1) {
+      throw new Error('Cannot archive sole key — use deleteKey or revokeContactKey instead');
+    }
+    if (record.activeKeyId === keyId) {
+      throw new Error('Cannot archive the active key — set a different key active first');
+    }
+    target.archivedAt = Date.now();
+  }
+
+  /**
+   * Delete a key entry. Per Q-IP-7, deleting the active key auto-promotes
+   * the most-recently-used archived entry. Deleting the sole key removes
+   * the entire {@link ContactRecord}.
+   */
+  deleteKey(userId: string, keyId: string): { autoPromoted?: string; contactRemoved: boolean } {
+    const record = this.persisted.contacts[userId];
+    if (!record) {
+      throw new Error(`Unknown contact: ${userId}`);
+    }
+    const targetIndex = record.keys.findIndex((k) => k.keyId === keyId);
+    if (targetIndex === -1) {
+      throw new Error(`Key ${keyId} not found on contact ${userId}`);
+    }
+
+    if (record.keys.length === 1) {
+      delete this.persisted.contacts[userId];
+      return { contactRemoved: true };
+    }
+
+    const isActive = record.activeKeyId === keyId;
+    record.keys.splice(targetIndex, 1);
+
+    if (!isActive) {
+      return { contactRemoved: false };
+    }
+
+    // Auto-promote the most-recently-used archived entry.
+    const candidate = [...record.keys].sort((a, b) => {
+      const aStamp = a.lastUsed ?? a.firstSeen;
+      const bStamp = b.lastUsed ?? b.firstSeen;
+      return bStamp - aStamp;
+    })[0];
+    candidate.archivedAt = undefined;
+    record.activeKeyId = candidate.keyId;
+    return { autoPromoted: candidate.keyId, contactRemoved: false };
+  }
+
+  /**
+   * Serialize + self-sign a key entry for out-of-band transfer. Returns both
+   * the raw JSON blob and a `tb1://ck/<base64url>` QR-friendly form.
+   *
+   * Distinct scheme from `tb1://pk/` (bootstrap bundle) to prevent
+   * cross-decoding; see plan §3.5 "Export / import formats".
+   */
+  exportKey(userId: string, keyId: string): { json: string; qrText: string } {
+    this.assertUnlocked();
+    if (!this.identity) {
+      throw new Error('No identity keypair available');
+    }
+    const record = this.persisted.contacts[userId];
+    if (!record) {
+      throw new Error(`Unknown contact: ${userId}`);
+    }
+    const entry = record.keys.find((k) => k.keyId === keyId);
+    if (!entry) {
+      throw new Error(`Key ${keyId} not found on contact ${userId}`);
+    }
+
+    const payload = {
+      type: 'tb1.contactKey' as const,
+      keyId: entry.keyId,
+      ed25519PublicKey: entry.ed25519PublicKey,
+      x25519PublicKey: entry.x25519PublicKey,
+      origin: entry.origin,
+      firstSeen: entry.firstSeen,
+      label: entry.label,
+    };
+    const signable = encodeUtf8(JSON.stringify(payload));
+    const signature = ed25519Sign(signable, this.identity.ed25519PrivateKey);
+    const signed = {
+      ...payload,
+      signature: toBase64(signature),
+      signedBy: toBase64(this.identity.ed25519PublicKey),
+    };
+    const json = JSON.stringify(signed);
+    const qrText = `tb1://ck/${toBase64Url(encodeUtf8(json))}`;
+    return { json, qrText };
+  }
+
+  /**
+   * Parse + verify an exported key payload and append it to the target
+   * contact's archive as inactive. Dedupes by keyId.
+   */
+  importKey(targetUserId: string, payload: string): ImportResult {
+    const CK_PREFIX = 'tb1://ck/';
+    let jsonText: string;
+    if (payload.startsWith(CK_PREFIX)) {
+      try {
+        jsonText = new TextDecoder().decode(fromBase64Url(payload.slice(CK_PREFIX.length)));
+      } catch {
+        throw new Error('Import payload is not valid base64url');
+      }
+    } else {
+      jsonText = payload;
+    }
+
+    let parsed: {
+      type?: string;
+      keyId?: string;
+      ed25519PublicKey?: string;
+      x25519PublicKey?: string;
+      origin?: ContactKeyEntry['origin'];
+      firstSeen?: number;
+      label?: string;
+      signature?: string;
+      signedBy?: string;
+    };
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      throw new Error('Import payload is not valid JSON');
+    }
+    if (parsed.type !== 'tb1.contactKey'
+      || !parsed.keyId
+      || !parsed.ed25519PublicKey
+      || !parsed.x25519PublicKey
+      || !parsed.origin
+      || typeof parsed.firstSeen !== 'number'
+      || !parsed.signature
+      || !parsed.signedBy) {
+      throw new Error('Import payload is missing required fields');
+    }
+
+    // Re-serialize the canonical signable form (strip signature + signedBy).
+    const canonical = {
+      type: 'tb1.contactKey' as const,
+      keyId: parsed.keyId,
+      ed25519PublicKey: parsed.ed25519PublicKey,
+      x25519PublicKey: parsed.x25519PublicKey,
+      origin: parsed.origin,
+      firstSeen: parsed.firstSeen,
+      label: parsed.label,
+    };
+    const signable = encodeUtf8(JSON.stringify(canonical));
+    const signature = fromBase64(parsed.signature);
+    const signedBy = fromBase64(parsed.signedBy);
+    if (!ed25519Verify(signable, signature, signedBy)) {
+      throw new Error('Import signature invalid');
+    }
+
+    const recomputedKeyId = deriveKeyId(parsed.ed25519PublicKey);
+    if (recomputedKeyId !== parsed.keyId) {
+      throw new Error('Import keyId does not match ed25519PublicKey');
+    }
+
+    const record = this.persisted.contacts[targetUserId];
+    if (!record) {
+      throw new Error(`Unknown contact: ${targetUserId}`);
+    }
+    if (record.keys.some((k) => k.keyId === parsed.keyId)) {
+      return { kind: 'duplicate', keyId: parsed.keyId };
+    }
+
+    const now = Date.now();
+    record.keys.push({
+      keyId: parsed.keyId,
+      ed25519PublicKey: parsed.ed25519PublicKey,
+      x25519PublicKey: parsed.x25519PublicKey,
+      origin: 'imported',
+      firstSeen: now,
+      label: parsed.label,
+      archivedAt: now,
+    });
+    return { kind: 'imported', keyId: parsed.keyId };
+  }
+
+  /**
+   * Enumerate known contacts. Never returns raw key bytes — only metadata
+   * safe to render in a list view.
+   */
+  listContacts(): ContactSummary[] {
+    const out: ContactSummary[] = [];
+    for (const [userId, record] of Object.entries(this.persisted.contacts)) {
+      const active = findActiveKey(record);
+      if (!active) continue;
+      out.push({
+        userId,
+        trustLevel: record.trustLevel,
+        activeKeyId: record.activeKeyId,
+        keyCount: record.keys.length,
+        activeKeyOrigin: active.origin,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Return a defensive copy of the per-contact key archive. Sorted active
+   * first, then archived in `lastUsed desc` order.
+   */
+  listContactKeys(userId: string): ContactKeyEntry[] {
+    const record = this.persisted.contacts[userId];
+    if (!record) return [];
+    const copies = record.keys.map((k) => ({ ...k }));
+    copies.sort((a, b) => {
+      const aActive = a.keyId === record.activeKeyId ? 1 : 0;
+      const bActive = b.keyId === record.activeKeyId ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
+      const aStamp = a.lastUsed ?? a.firstSeen;
+      const bStamp = b.lastUsed ?? b.firstSeen;
+      return bStamp - aStamp;
+    });
+    return copies;
+  }
+
+  /**
+   * Drop a contact's archive entirely and cascade-clean any chat sessions
+   * that were negotiated against its keys. Returns the list of chatIds
+   * whose chat-key records were removed so the action layer can clear
+   * corresponding `prekeyPublishedChatIds` entries.
+   */
+  revokeContactKey(userId: string): { droppedChatIds: string[] } {
+    const record = this.persisted.contacts[userId];
+    if (!record) {
+      return { droppedChatIds: [] };
+    }
+    const doomedKeyIds = new Set(record.keys.map((k) => k.keyId));
+    delete this.persisted.contacts[userId];
+
+    const droppedChatIds: string[] = [];
+    for (const [chatId, chatRecord] of Object.entries(this.persisted.chatKeys)) {
+      if (chatRecord.derivedFromKeyId && doomedKeyIds.has(chatRecord.derivedFromKeyId)) {
+        delete this.persisted.chatKeys[chatId];
+        const inMemory = this.chatKeys.get(chatId);
+        if (inMemory) {
+          secureWipe(inMemory.key);
+          if (inMemory.previousKey) secureWipe(inMemory.previousKey);
+          this.chatKeys.delete(chatId);
+        }
+        droppedChatIds.push(chatId);
+      }
+    }
+    return { droppedChatIds };
+  }
+
+  // ---------------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------------
 
@@ -843,6 +1198,19 @@ export class TelebridgeState {
       throw new Error('TelebridgeState is locked. Call unlock() first.');
     }
   }
+}
+
+/** base64url encode (URL-safe alphabet, no padding). */
+function toBase64Url(bytes: Uint8Array): string {
+  return toBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** base64url decode — mirror of toBase64Url. */
+function fromBase64Url(text: string): Uint8Array {
+  let normalized = text.replace(/-/g, '+').replace(/_/g, '/');
+  const padLen = (4 - (normalized.length % 4)) % 4;
+  normalized += '='.repeat(padLen);
+  return fromBase64(normalized);
 }
 
 /** Convert 4 random bytes to a hex key ID string */

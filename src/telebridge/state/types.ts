@@ -155,6 +155,27 @@ export interface RotationInfo {
   previousKeyId?: string;
 }
 
+/** Result of applying an in-person scan to the contact archive. */
+export type ScanResult =
+  | { kind: 'fresh'; keyId: string; needsUserConfirmation: false }
+  | { kind: 'matchedActive'; keyId: string; needsUserConfirmation: false }
+  | { kind: 'matchedArchived'; keyId: string; needsUserConfirmation: true }
+  | { kind: 'newKeyAddedInactive'; keyId: string; needsUserConfirmation: true };
+
+/** Result of importing a signed contact-key payload. */
+export type ImportResult =
+  | { kind: 'imported'; keyId: string }
+  | { kind: 'duplicate'; keyId: string };
+
+/** Lightweight summary used by list views — never exposes raw key bytes. */
+export interface ContactSummary {
+  userId: string;
+  trustLevel: ContactTrustLevel;
+  activeKeyId: string;
+  keyCount: number;
+  activeKeyOrigin: ContactKeyOrigin;
+}
+
 /** Fields that must NEVER appear in persisted state */
 export const PLAINTEXT_FIELD_NAMES = [
   'derivedKey',
