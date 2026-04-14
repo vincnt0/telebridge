@@ -324,6 +324,7 @@ type StateProps = {
   shouldOpenMessageMediaEditor?: TabState['shouldOpenMessageMediaEditor'];
   // Telebridge Layer 4 — Send Secured preconditions.
   canSendSecured?: boolean;
+  securedModeOn?: boolean;
   bridgeLastError?: string;
 };
 
@@ -453,6 +454,7 @@ const Composer = ({
   replyToMessage,
   shouldOpenMessageMediaEditor,
   canSendSecured,
+  securedModeOn,
   bridgeLastError,
   onDropHide,
   onFocus,
@@ -1260,6 +1262,19 @@ const Composer = ({
 
         if (areEffectsSupported) saveEffectInDraft({ chatId, threadId, effectId: undefined });
 
+        // Send Secured is plaintext-only; formatted input falls back to plain send.
+        if (
+          willSendSecuredByDefault
+          && text
+          && !isForwarding
+          && !scheduledAt
+          && !scheduleRepeatPeriod
+          && !entities?.length
+        ) {
+          handleSendSecured();
+          return;
+        }
+
         sendMessage({
           messageList: currentMessageList,
           text,
@@ -1991,6 +2006,29 @@ const Composer = ({
     });
   });
 
+  const handleSendPlain = useLastCallback(() => {
+    if (!currentMessageList) return;
+    const { text, entities } = parseHtmlAsFormattedText(getHtml());
+    if (!text) return;
+    sendMessage({
+      messageList: currentMessageList,
+      text,
+      entities,
+    });
+    clearDraft({ chatId, threadId, isLocalOnly: true });
+    requestMeasure(() => {
+      resetComposer();
+    });
+  });
+
+  const willSendSecuredByDefault = Boolean(
+    securedModeOn
+    && canSendSecured
+    && !attachments.length
+    && !activeVoiceRecording
+    && !isInScheduledList,
+  );
+
   useEffect(() => {
     if (
       bridgeLastError !== 'BridgeSendSecuredNoPeerKey'
@@ -2584,7 +2622,8 @@ const Composer = ({
           onSendSilent={!isChatWithSelf ? handleSendSilent : undefined}
           onSendSchedule={!isInScheduledList ? handleSendScheduled : undefined}
           onSendWhenOnline={handleSendWhenOnline}
-          onSendSecured={canSendSecured ? handleSendSecured : undefined}
+          onSendSecured={(canSendSecured && !securedModeOn) ? handleSendSecured : undefined}
+          onSendPlain={willSendSecuredByDefault ? handleSendPlain : undefined}
           onRemoveEffect={handleRemoveEffect}
           onClose={handleContextMenuClose}
           onCloseAnimationEnd={handleContextMenuHide}
@@ -2723,6 +2762,7 @@ export default memo(withGlobal<OwnProps>(
       && chatId !== SERVICE_NOTIFICATIONS_USER_ID
       && global.bridge.contactKeyIds[chatId],
     );
+    const securedModeOn = Boolean(global.bridge.securedModeByChatId[chatId]);
 
     return {
       availableReactions: global.reactions.availableReactions,
@@ -2819,6 +2859,7 @@ export default memo(withGlobal<OwnProps>(
       shouldOpenMessageMediaEditor,
       replyToMessage,
       canSendSecured,
+      securedModeOn,
       bridgeLastError: global.bridge.lastError,
     };
   },

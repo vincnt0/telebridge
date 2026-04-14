@@ -36,6 +36,7 @@ export type OwnProps = {
   onSendSchedule?: NoneToVoidFunction;
   onSendWhenOnline?: NoneToVoidFunction;
   onSendSecured?: NoneToVoidFunction;
+  onSendPlain?: NoneToVoidFunction;
   onRemoveEffect?: NoneToVoidFunction;
   onClose: NoneToVoidFunction;
   onCloseAnimationEnd?: NoneToVoidFunction;
@@ -64,6 +65,7 @@ const CustomSendMenu: FC<OwnProps> = ({
   onSendSchedule,
   onSendWhenOnline,
   onSendSecured,
+  onSendPlain,
   onRemoveEffect,
   onClose,
   onCloseAnimationEnd,
@@ -162,6 +164,11 @@ const CustomSendMenu: FC<OwnProps> = ({
         {onSendSecured && (
           <MenuItem icon="lock" onClick={onSendSecured}>
             {lang('BridgeSendSecuredMenuItem')}
+          </MenuItem>
+        )}
+        {onSendPlain && (
+          <MenuItem icon="unlock" onClick={onSendPlain}>
+            {lang('BridgeSendPlainMenuItem')}
           </MenuItem>
         )}
         {canSchedule && onSendSchedule && (
