@@ -216,6 +216,15 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     ...cached.chatFolders,
   };
 
+  // Telebridge: spread initial bridge state so caches written before newer
+  // fields (kxInProgressChatIds, contactKeyIds, contactTofuStatusByContactId,
+  // bridgeMismatchPending, bridgeLastExport, ...) were added still load
+  // cleanly. Without this, components reading those maps deref undefined.
+  cached.bridge = {
+    ...initialState.bridge,
+    ...cached.bridge,
+  };
+
   if (!cached.chats.similarChannelsById) {
     cached.chats.similarChannelsById = initialState.chats.similarChannelsById;
   }
