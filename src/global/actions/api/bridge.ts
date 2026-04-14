@@ -31,6 +31,7 @@ import { encodePrekeyPublication } from '../../../telebridge/protocol/encode';
 import { InvalidSignatureError, verifyPrekeyBundle } from '../../../telebridge/protocol/verify';
 import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
 import { getTelebridgeVault } from '../../../telebridge/send';
+import { MAIN_THREAD_ID } from '../../../api/types/messages';
 import { isUserId } from '../../../util/entities/ids';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { pause, rafPromise } from '../../../util/schedulers';
@@ -282,7 +283,11 @@ addActionHandler('bridgePublishPrekey', async (global, actions, payload): Promis
 
     const wireText = await buildPrekeyWireMessage();
 
-    getActions().sendMessage({ chat, text: wireText, tabId: getCurrentTabId() });
+    getActions().sendMessage({
+      messageList: { chatId, threadId: MAIN_THREAD_ID, type: 'thread' },
+      text: wireText,
+      tabId: getCurrentTabId(),
+    });
 
     global = getGlobal();
     setGlobal({
@@ -383,24 +388,29 @@ addActionHandler('bridgeStartKeyExchange', async (global, actions, payload): Pro
       throw new Error(`Chat ${chatId} not found`);
     }
 
-    // Step b — make sure our prekey is out there.
-    if (!global.bridge.prekeyPublishedChatIds[chatId]) {
-      const wireText = await buildPrekeyWireMessage();
-      getActions().sendMessage({ chat, text: wireText, tabId: getCurrentTabId() });
+    // Step b — (re)publish our prekey. Cheap + idempotent on the receiver
+    // side; re-publishing on every Start-click lets the user recover from a
+    // prior send that silently failed (offline / flood-wait / missing
+    // messageList payload).
+    const wireText = await buildPrekeyWireMessage();
+    getActions().sendMessage({
+      messageList: { chatId, threadId: MAIN_THREAD_ID, type: 'thread' },
+      text: wireText,
+      tabId: getCurrentTabId(),
+    });
 
-      global = getGlobal();
-      global = {
-        ...global,
-        bridge: {
-          ...global.bridge,
-          prekeyPublishedChatIds: {
-            ...global.bridge.prekeyPublishedChatIds,
-            [chatId]: true,
-          },
+    global = getGlobal();
+    global = {
+      ...global,
+      bridge: {
+        ...global.bridge,
+        prekeyPublishedChatIds: {
+          ...global.bridge.prekeyPublishedChatIds,
+          [chatId]: true,
         },
-      };
-      setGlobal(global);
-    }
+      },
+    };
+    setGlobal(global);
 
     // Step c — do we have the contact's prekey?
     const contact = vault.getContactKey(peerId);
@@ -429,7 +439,11 @@ addActionHandler('bridgeStartKeyExchange', async (global, actions, payload): Pro
 
     const initiation = await initiateKeyExchange(myIdentity, contactX25519);
 
-    getActions().sendMessage({ chat, text: initiation.wireMessage, tabId: getCurrentTabId() });
+    getActions().sendMessage({
+      messageList: { chatId, threadId: MAIN_THREAD_ID, type: 'thread' },
+      text: initiation.wireMessage,
+      tabId: getCurrentTabId(),
+    });
 
     const persistedJson = await vault.storeChatKey(chatId, initiation.chatKey, initiation.keyId);
 

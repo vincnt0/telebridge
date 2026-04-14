@@ -61,7 +61,7 @@ const StartEncryptedChatBanner = ({
         color="primary"
         className={styles.action}
         isLoading={isBusy}
-        disabled={isBusy || isWaiting}
+        disabled={isBusy}
         onClick={handleClick}
       >
         {buttonLabel}

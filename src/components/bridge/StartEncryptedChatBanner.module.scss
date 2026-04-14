@@ -1,9 +1,20 @@
 .banner {
+  position: absolute;
+  top: calc(var(--header-height) + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+
+  box-sizing: border-box;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 0.75rem;
+
+  width: calc(100% - 1.5rem);
+  max-width: 36rem;
   padding: 0.5rem 0.75rem;
-  margin: 0.5rem 0.75rem 0;
+
   border-radius: var(--border-radius-default);
   background: var(--color-background-secondary);
   color: var(--color-text);
