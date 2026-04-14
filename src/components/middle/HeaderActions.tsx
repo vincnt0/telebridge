@@ -6,7 +6,7 @@ import { getActions, withGlobal } from '../../global';
 
 import type { IAnchorPosition, MessageListType, ThreadId } from '../../types';
 import { MAIN_THREAD_ID } from '../../api/types';
-import { ManagementScreens } from '../../types';
+import { ManagementScreens, SettingsScreens } from '../../types';
 
 import { COCOON_EMOJI_ID } from '../../config';
 import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterdom';
@@ -91,6 +91,10 @@ interface StateProps {
   detectedChatLanguage?: string;
   doNotTranslate: string[];
   isAccountFrozen?: boolean;
+  canShowBridgeMenu: boolean;
+  isBridgeUnlocked: boolean;
+  hasPinnedContactKey: boolean;
+  securedModeOn: boolean;
 }
 
 const HeaderActions: FC<OwnProps & StateProps> = ({
@@ -128,6 +132,10 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   detectedChatLanguage,
   doNotTranslate,
   isAccountFrozen,
+  canShowBridgeMenu,
+  isBridgeUnlocked,
+  hasPinnedContactKey,
+  securedModeOn,
   onTopicSearch,
 }) => {
   const {
@@ -147,6 +155,9 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
     setViewForumAsMessages,
     openFrozenAccountModal,
     openCocoonModal,
+    bridgeToggleSecuredMode,
+    openChatWithInfo,
+    openSettingsScreen,
   } = getActions();
   const menuButtonRef = useRef<HTMLButtonElement>();
   const oldLang = useOldLang();
@@ -282,6 +293,18 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
     openCocoonModal();
   });
 
+  const handleBridgeToggle = useLastCallback(() => {
+    bridgeToggleSecuredMode({ chatId });
+  });
+
+  const handleViewKeys = useLastCallback(() => {
+    openChatWithInfo({ id: chatId, profileTab: 'keys' });
+  });
+
+  const handleOpenBridgeSettings = useLastCallback(() => {
+    openSettingsScreen({ screen: SettingsScreens.Bridge });
+  });
+
   const handleDoNotTranslate = useLastCallback(() => {
     if (!detectedChatLanguage) return;
 
@@ -311,6 +334,27 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
       />
     );
   }, [isRightColumnShown, oldLang]);
+
+  const BridgeMenuButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {
+    const ariaLabel = lang('BridgeHeaderMenuAriaLabel');
+    const iconName = securedModeOn ? 'lock' : 'unlock';
+    return ({ onTrigger, isOpen }) => (
+      <Button
+        round
+        ripple={isRightColumnShown}
+        color="translucent"
+        size="smaller"
+        className={isOpen ? 'active' : ''}
+        onClick={onTrigger}
+        ariaLabel={ariaLabel}
+        iconName={iconName}
+      />
+    );
+  }, [isRightColumnShown, lang, securedModeOn]);
+
+  const bridgeToggleLabel = hasPinnedContactKey
+    ? (securedModeOn ? lang('BridgeHeaderMenuToggleOn') : lang('BridgeHeaderMenuToggleOff'))
+    : lang('BridgeHeaderMenuToggleUnavailable');
 
   return (
     <div className="HeaderActions">
@@ -399,6 +443,29 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
             >
               {oldLang('Unblock')}
             </Button>
+          )}
+          {canShowBridgeMenu && (
+            <DropdownMenu
+              className="bridge-header-menu with-menu-transitions"
+              trigger={BridgeMenuButton}
+              positionX="right"
+              autoClose={false}
+            >
+              <MenuItem
+                icon={securedModeOn ? 'check' : 'placeholder'}
+                disabled={!hasPinnedContactKey}
+                onClick={handleBridgeToggle}
+              >
+                {bridgeToggleLabel}
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem icon="key" onClick={handleViewKeys}>
+                {lang('BridgeHeaderMenuViewKeys')}
+              </MenuItem>
+              <MenuItem icon="settings" onClick={handleOpenBridgeSettings}>
+                {lang('BridgeHeaderMenuOpenSettings')}
+              </MenuItem>
+            </DropdownMenu>
           )}
           {canSearch && (
             <Button
@@ -503,6 +570,10 @@ export default memo(withGlobal<OwnProps>(
         language,
         translationLanguage,
         doNotTranslate,
+        canShowBridgeMenu: false,
+        isBridgeUnlocked: Boolean(global.bridge.isUnlocked),
+        hasPinnedContactKey: false,
+        securedModeOn: false,
       } as Complete<StateProps>;
     }
 
@@ -548,6 +619,11 @@ export default memo(withGlobal<OwnProps>(
 
     const channelMonoforumId = isChatChannel(chat) ? chat.linkedMonoforumId : undefined;
 
+    const isBridgeUnlocked = Boolean(global.bridge.isUnlocked);
+    const hasPinnedContactKey = Boolean(global.bridge.contactKeyIds[chatId]);
+    const securedModeOn = Boolean(global.bridge.securedModeByChatId[chatId]);
+    const canShowBridgeMenu = isBridgeUnlocked && isPrivate && !isChatWithSelf && !bot && isMainThread;
+
     return {
       noMenu: false,
       isChannel,
@@ -578,6 +654,10 @@ export default memo(withGlobal<OwnProps>(
       canUnblock,
       isAccountFrozen,
       channelMonoforumId,
+      canShowBridgeMenu,
+      isBridgeUnlocked,
+      hasPinnedContactKey,
+      securedModeOn,
     };
   },
 )(HeaderActions));
