@@ -17,7 +17,7 @@
 
 import type { ActionReturnType, GlobalState } from '../../types';
 
-import { concatBytes, ed25519Sign } from '../../../telebridge/crypto';
+import { concatBytes, ed25519Sign, ed25519Verify } from '../../../telebridge/crypto';
 import { initiateKeyExchange, respondToKeyExchange } from '../../../telebridge/keyExchange';
 import { decodePrekeyPublication } from '../../../telebridge/protocol/decode';
 import { encodePrekeyPublication } from '../../../telebridge/protocol/encode';
@@ -271,6 +271,17 @@ addActionHandler('bridgeStoreContactPrekey', async (global, actions, payload): P
     }
 
     const decoded = decodePrekeyPublication(wireText);
+
+    // Verify the self-signature before pinning. Proves the publisher holds
+    // the private key for the declared Ed25519 public key; it does NOT bind
+    // that key to the Telegram user id (that remains TOFU, per ARCHITECTURE
+    // Layer 1). Drop silently on failure so a malformed/forged tb1.pk in a
+    // high-volume receive cycle never banners the user or breaks the router.
+    const signable = concatBytes(decoded.ed25519PublicKey, decoded.x25519PublicKey);
+    if (!ed25519Verify(signable, decoded.signature, decoded.ed25519PublicKey)) {
+      return;
+    }
+
     const result = vault.storeContactKey(senderId, decoded.ed25519PublicKey, decoded.x25519PublicKey);
     const persistedJson = vault.toPersistable();
 

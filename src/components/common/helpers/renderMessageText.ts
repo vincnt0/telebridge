@@ -81,7 +81,8 @@ export function renderMessageText({
       text = cached;
       entities = undefined;
     } else {
-      ensureDecryptedText(message.chatId, messageKey, rawText);
+      const senderId = 'senderId' in message ? message.senderId : undefined;
+      ensureDecryptedText(message.chatId, messageKey, rawText, senderId);
     }
   }
 

@@ -75,7 +75,7 @@ export function getMessageTextWithSpoilers(
       textWithoutTranscription = cached;
       entities = undefined;
     } else {
-      ensureDecryptedText(message.chatId, messageKey, rawText);
+      ensureDecryptedText(message.chatId, messageKey, rawText, message.senderId);
     }
   }
   if (!entities?.length) {

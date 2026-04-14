@@ -72,6 +72,7 @@ export function ensureDecryptedText(
   chatId: string,
   messageKey: string,
   encryptedText: string,
+  senderId?: string,
 ): void {
   // Machine-msg wire formats (prekey publish, key exchange) are handled by
   // their own dispatchers — they're not `tb1.s` ciphertext and would only
@@ -85,16 +86,23 @@ export function ensureDecryptedText(
   const chatKey = vault.getChatKey(chatId);
   if (!chatKey) return;
 
+  // Per-message sig is defence-in-depth on top of GCM+TOFU'd chat key; if the
+  // contact prekey hasn't arrived yet we decrypt without verify rather than reject.
+  const senderPublicKey = senderId ? vault.getContactKey(senderId)?.publicKey : undefined;
+
   inflight.add(messageKey);
 
   void (async () => {
     try {
-      const result = await decryptSymmetricMessage(encryptedText, chatKey);
-      if (result.status === 'success' || result.status === 'invalidSignature') {
+      const result = await decryptSymmetricMessage(encryptedText, chatKey, senderPublicKey);
+      if (result.status === 'success') {
         if (result.text !== undefined) {
           getActions().bridgeSetDecryptedText({ messageKey, text: result.text });
         }
       }
+      // invalidSignature: known contact key failed to verify — someone with
+      // the chat key forged a message. Don't surface the plaintext; leave
+      // the ciphertext visible so the user sees something is wrong.
       // wrongKey / malformed: leave the ciphertext visible — the UI can
       // flag these separately once the lock-state indicator lands.
     } finally {
@@ -115,7 +123,7 @@ export function ensureDecryptedBeforeCopy(message: ApiMessage): boolean {
   if (!rawText || !isTelebridgeMessage(rawText)) return true;
   const messageKey = getMessageKey(message);
   if (getCachedDecryptedText(messageKey) !== undefined) return true;
-  ensureDecryptedText(message.chatId, messageKey, rawText);
+  ensureDecryptedText(message.chatId, messageKey, rawText, message.senderId);
   return false;
 }
 
@@ -141,7 +149,7 @@ export function backfillDecryptsForAllChats(): void {
       // consume them; kx next so chat keys exist before decrypt attempts.
       ensurePrekeyProcessed(message);
       ensureKxProcessed(message);
-      ensureDecryptedText(chatId, getMessageKey(message), text);
+      ensureDecryptedText(chatId, getMessageKey(message), text, message.senderId);
     }
   }
 }
