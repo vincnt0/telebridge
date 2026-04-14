@@ -2140,6 +2140,7 @@ export interface LangPair {
   'BridgeScannerPermissionDenied': undefined;
   'BridgeScannerPasteFallbackPlaceholder': undefined;
   'BridgeScannerPasteButton': undefined;
+  'BridgeScannerInvalidPasted': undefined;
   'BridgeShowMyQrTitle': undefined;
   'BridgeShowMyQrFingerprintLabel': undefined;
   'BridgeShowMyQrUnlockRequired': undefined;

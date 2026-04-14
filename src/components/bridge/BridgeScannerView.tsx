@@ -43,6 +43,7 @@ const BridgeScannerView = ({ isOpen, onBundleDetected, onCancel }: OwnProps) => 
   const hasEmittedRef = useRef(false);
 
   const [pasteValue, setPasteValue] = useState('');
+  const [pasteError, setPasteError] = useState(false);
   const [hasCameraError, markCameraError, clearCameraError] = useFlag(false);
 
   const stopScan = useLastCallback(() => {
@@ -101,11 +102,17 @@ const BridgeScannerView = ({ isOpen, onBundleDetected, onCancel }: OwnProps) => 
 
   const handlePasteChange = useLastCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     setPasteValue(e.currentTarget.value);
+    if (pasteError) setPasteError(false);
   });
 
   const handleUsePasted = useLastCallback(() => {
     const trimmed = pasteValue.trim();
     if (!trimmed) return;
+    if (!trimmed.startsWith(BUNDLE_PREFIX)) {
+      setPasteError(true);
+      return;
+    }
+    setPasteError(false);
     handleDetected(trimmed);
   });
 
@@ -153,6 +160,9 @@ const BridgeScannerView = ({ isOpen, onBundleDetected, onCancel }: OwnProps) => 
             spellCheck={false}
             autoComplete="off"
           />
+          {pasteError && (
+            <p className={styles.errorText}>{lang('BridgeScannerInvalidPasted')}</p>
+          )}
         </div>
 
         <div className={styles.actions}>

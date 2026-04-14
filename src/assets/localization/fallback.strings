@@ -2891,6 +2891,7 @@
 "BridgeScannerPermissionDenied" = "Camera access needed to scan. Paste the tb1:// URL instead:";
 "BridgeScannerPasteFallbackPlaceholder" = "Paste tb1://pk/... URL here";
 "BridgeScannerPasteButton" = "Use pasted URL";
+"BridgeScannerInvalidPasted" = "That's not a Telebridge identity URL. Paste a tb1://pk/... string.";
 "BridgeShowMyQrTitle" = "Your identity QR";
 "BridgeShowMyQrFingerprintLabel" = "Fingerprint";
 "BridgeShowMyQrUnlockRequired" = "Unlock Bridge to display your QR";

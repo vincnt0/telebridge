@@ -937,7 +937,10 @@ export class TelebridgeState {
    * the most-recently-used archived entry. Deleting the sole key removes
    * the entire {@link ContactRecord}.
    */
-  deleteKey(userId: string, keyId: string): { autoPromoted?: string; contactRemoved: boolean } {
+  deleteKey(
+    userId: string,
+    keyId: string,
+  ): { autoPromoted?: string; contactRemoved: boolean; droppedChatIds: string[] } {
     const record = this.persisted.contacts[userId];
     if (!record) {
       throw new Error(`Unknown contact: ${userId}`);
@@ -949,14 +952,16 @@ export class TelebridgeState {
 
     if (record.keys.length === 1) {
       delete this.persisted.contacts[userId];
-      return { contactRemoved: true };
+      const droppedChatIds = this.dropChatKeysDerivedFrom(new Set([keyId]));
+      return { contactRemoved: true, droppedChatIds };
     }
 
     const isActive = record.activeKeyId === keyId;
     record.keys.splice(targetIndex, 1);
+    const droppedChatIds = this.dropChatKeysDerivedFrom(new Set([keyId]));
 
     if (!isActive) {
-      return { contactRemoved: false };
+      return { contactRemoved: false, droppedChatIds };
     }
 
     // Auto-promote the most-recently-used archived entry.
@@ -967,7 +972,29 @@ export class TelebridgeState {
     })[0];
     candidate.archivedAt = undefined;
     record.activeKeyId = candidate.keyId;
-    return { autoPromoted: candidate.keyId, contactRemoved: false };
+    return { autoPromoted: candidate.keyId, contactRemoved: false, droppedChatIds };
+  }
+
+  /**
+   * Drop every `chatKeys` entry whose `derivedFromKeyId` is in the given set,
+   * securely wiping the in-memory key material. Shared helper for
+   * {@link deleteKey} and {@link revokeContactKey}.
+   */
+  private dropChatKeysDerivedFrom(doomedKeyIds: Set<string>): string[] {
+    const droppedChatIds: string[] = [];
+    for (const [chatId, chatRecord] of Object.entries(this.persisted.chatKeys)) {
+      if (chatRecord.derivedFromKeyId && doomedKeyIds.has(chatRecord.derivedFromKeyId)) {
+        delete this.persisted.chatKeys[chatId];
+        const inMemory = this.chatKeys.get(chatId);
+        if (inMemory) {
+          secureWipe(inMemory.key);
+          if (inMemory.previousKey) secureWipe(inMemory.previousKey);
+          this.chatKeys.delete(chatId);
+        }
+        droppedChatIds.push(chatId);
+      }
+    }
+    return droppedChatIds;
   }
 
   /**
@@ -1151,21 +1178,7 @@ export class TelebridgeState {
     }
     const doomedKeyIds = new Set(record.keys.map((k) => k.keyId));
     delete this.persisted.contacts[userId];
-
-    const droppedChatIds: string[] = [];
-    for (const [chatId, chatRecord] of Object.entries(this.persisted.chatKeys)) {
-      if (chatRecord.derivedFromKeyId && doomedKeyIds.has(chatRecord.derivedFromKeyId)) {
-        delete this.persisted.chatKeys[chatId];
-        const inMemory = this.chatKeys.get(chatId);
-        if (inMemory) {
-          secureWipe(inMemory.key);
-          if (inMemory.previousKey) secureWipe(inMemory.previousKey);
-          this.chatKeys.delete(chatId);
-        }
-        droppedChatIds.push(chatId);
-      }
-    }
-    return { droppedChatIds };
+    return { droppedChatIds: this.dropChatKeysDerivedFrom(doomedKeyIds) };
   }
 
   // ---------------------------------------------------------------------------

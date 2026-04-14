@@ -629,6 +629,7 @@ addActionHandler('bridgeApplyInPersonScan', async (global, actions, payload): Pr
         bridgeMismatchPending: result.needsUserConfirmation
           ? { peerUserId, scannedKeyId: result.keyId, kind: result.kind }
           : global.bridge.bridgeMismatchPending,
+        lastError: undefined,
       },
     });
   } catch (err) {
@@ -713,6 +714,16 @@ addActionHandler('bridgeDeleteContactKey', (global, actions, payload): ActionRet
       }
     }
 
+    // Cascade: any chat session that was negotiated against a dropped key
+    // must have its runtime pointers cleared so the UI doesn't keep showing
+    // an encrypted badge for a chat whose key is gone.
+    const nextChatKeyIds = { ...global.bridge.chatKeyIds };
+    const nextPrekeyPublished = { ...global.bridge.prekeyPublishedChatIds };
+    for (const chatId of result.droppedChatIds) {
+      delete nextChatKeyIds[chatId];
+      delete nextPrekeyPublished[chatId];
+    }
+
     return {
       ...global,
       bridge: {
@@ -720,6 +731,8 @@ addActionHandler('bridgeDeleteContactKey', (global, actions, payload): ActionRet
         persistedJson,
         contactKeyIds: nextContactKeyIds,
         contactTofuStatusByContactId: nextTofu,
+        chatKeyIds: nextChatKeyIds,
+        prekeyPublishedChatIds: nextPrekeyPublished,
       },
     };
   } catch (err) {
