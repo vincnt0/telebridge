@@ -12,6 +12,7 @@ import ChangeBridgePasswordDialog from '../../bridge/ChangeBridgePasswordDialog'
 import SetupBridgeDialog from '../../bridge/SetupBridgeDialog';
 import UnlockBridgeDialog from '../../bridge/UnlockBridgeDialog';
 import Button from '../../ui/Button';
+import Checkbox from '../../ui/Checkbox';
 import SettingsBridgeContacts from './SettingsBridgeContacts';
 
 import styles from './SettingsBridge.module.scss';
@@ -26,6 +27,7 @@ type StateProps = {
   isUnlocked: boolean;
   isBusy: boolean;
   chatKeyCount: number;
+  isDebugMode: boolean;
 };
 
 const SettingsBridge = ({
@@ -34,9 +36,10 @@ const SettingsBridge = ({
   isUnlocked,
   isBusy,
   chatKeyCount,
+  isDebugMode,
   onReset,
 }: OwnProps & StateProps) => {
-  const { bridgeLock } = getActions();
+  const { bridgeLock, bridgeToggleDebugMode } = getActions();
   const lang = useLang();
 
   const [isSetupOpen, openSetup, closeSetup] = useFlag(false);
@@ -114,6 +117,16 @@ const SettingsBridge = ({
         <SettingsBridgeContacts isUnlocked={isUnlocked} />
       )}
 
+      <div className="settings-item">
+        <h3 className="settings-item-header">{lang('BridgeDebugModeLabel')}</h3>
+        <p className="settings-item-description">{lang('BridgeDebugModeDescription')}</p>
+        <Checkbox
+          label={lang('BridgeDebugModeLabel')}
+          checked={isDebugMode}
+          onCheck={() => bridgeToggleDebugMode()}
+        />
+      </div>
+
       <SetupBridgeDialog isOpen={isSetupOpen} onClose={closeSetup} />
       <UnlockBridgeDialog isOpen={isUnlockOpen} onClose={closeUnlock} />
       <ChangeBridgePasswordDialog isOpen={isChangePasswordOpen} onClose={closeChangePassword} />
@@ -127,5 +140,6 @@ export default memo(withGlobal<OwnProps>(
     isUnlocked: global.bridge.isUnlocked,
     isBusy: Boolean(global.bridge.isBusy),
     chatKeyCount: Object.keys(global.bridge.chatKeyIds).length,
+    isDebugMode: Boolean(global.bridge.isDebugMode),
   }),
 )(SettingsBridge));
