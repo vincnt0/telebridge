@@ -577,9 +577,11 @@ addActionHandler('bridgeRemoveChatKey', async (global, actions, payload): Promis
  * for `chatId`. Gated on `global.bridge.isDebugMode`. Exists to sidestep
  * Layer-2 KX when testing two-account scenarios on a single device (pin the
  * same symmetric key on both accounts so `tb1.s` round-trips without a real
- * handshake). Refuses to overwrite an existing chat key — the user must
- * remove the KX-derived key first. Stamps `derivedFromKeyId = '__manual__'`
- * so downstream code can tell manual keys apart from KX-derived ones.
+ * handshake). Does NOT require a pinned contact identity key — solo testers
+ * must be able to install a chat key without running KX first. Refuses to
+ * overwrite an existing chat key — the user must remove the KX-derived key
+ * first. Stamps `derivedFromKeyId = '__manual__'` so downstream code can
+ * tell manual keys apart from KX-derived ones.
  */
 addActionHandler('bridgeSetManualChatKey', async (global, actions, payload): Promise<void> => {
   const { chatId, keyText, tabId = getCurrentTabId() } = payload;
@@ -593,14 +595,6 @@ addActionHandler('bridgeSetManualChatKey', async (global, actions, payload): Pro
   }
 
   if (!global.bridge.isUnlocked) {
-    setGlobal({
-      ...global,
-      bridge: { ...global.bridge, lastError: 'BridgeKeysTabDevToolsErrorUnavailable' },
-    });
-    return;
-  }
-
-  if (!global.bridge.contactKeyIds[chatId]) {
     setGlobal({
       ...global,
       bridge: { ...global.bridge, lastError: 'BridgeKeysTabDevToolsErrorUnavailable' },
