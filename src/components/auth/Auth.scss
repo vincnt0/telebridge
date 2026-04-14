@@ -34,8 +34,37 @@
   }
 
   #logo {
+    position: relative;
+
     background: url("../../assets/telegram-logo.svg") center no-repeat;
     background-size: 100%;
+
+    // Telebridge glitch treatment — two RGB-split ghost copies over the base logo.
+    &::before,
+    &::after {
+      content: "";
+
+      position: absolute;
+      inset: 0;
+
+      background: inherit;
+      background-size: 100%;
+
+      pointer-events: none;
+
+      mix-blend-mode: screen;
+    }
+
+    &::before {
+      animation: telebridge-logo-glitch-red 2.6s infinite steps(1);
+      filter: drop-shadow(0.0625rem 0 0 rgba(255, 40, 80, 0.85));
+    }
+
+    &::after {
+      animation: telebridge-logo-glitch-cyan 2.6s infinite steps(1);
+      animation-delay: -1.3s;
+      filter: drop-shadow(-0.0625rem 0 0 rgba(40, 220, 255, 0.85));
+    }
   }
 
   h1 {
@@ -98,6 +127,55 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+}
+
+// Telebridge branded title — glitch treatment on the two primary
+// entry-screen titles only. AuthCode / AuthPassword / AuthRegister
+// headers keep the plain Telegram look.
+#auth-phone-number-form,
+#auth-qr-form {
+  h1 {
+    position: relative;
+
+    display: inline-block;
+
+    color: var(--color-text);
+
+    &[data-text]::before,
+    &[data-text]::after {
+      content: attr(data-text);
+
+      position: absolute;
+      top: 0;
+      left: 0;
+
+      width: 100%;
+      height: 100%;
+
+      overflow: hidden;
+
+      pointer-events: none;
+    }
+
+    &[data-text]::before {
+      color: rgba(255, 40, 80, 0.9);
+      transform: translate(-0.0625rem, 0);
+
+      animation: telebridge-title-glitch-red 3.2s infinite steps(1);
+
+      clip-path: inset(0 0 60% 0);
+    }
+
+    &[data-text]::after {
+      color: rgba(40, 220, 255, 0.9);
+      transform: translate(0.0625rem, 0);
+
+      animation: telebridge-title-glitch-cyan 3.2s infinite steps(1);
+      animation-delay: -1.6s;
+
+      clip-path: inset(60% 0 0 0);
+    }
   }
 }
 
@@ -256,5 +334,113 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+// Telebridge glitch animations — four discrete states per cycle,
+// using steps(1) so transitions snap rather than tween. Clip-path
+// slices expose a different horizontal band of the logo each frame,
+// and subpixel x-offsets create the RGB-split shimmer.
+
+@keyframes telebridge-logo-glitch-red {
+  0% {
+    clip-path: inset(6% 0 78% 0);
+    transform: translate(0.125rem, 0);
+  }
+  22% {
+    clip-path: inset(38% 0 46% 0);
+    transform: translate(-0.125rem, 0);
+  }
+  47% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0);
+  }
+  72% {
+    clip-path: inset(68% 0 14% 0);
+    transform: translate(0.1875rem, 0);
+  }
+  100% {
+    clip-path: inset(6% 0 78% 0);
+    transform: translate(0.125rem, 0);
+  }
+}
+
+@keyframes telebridge-logo-glitch-cyan {
+  0% {
+    clip-path: inset(58% 0 22% 0);
+    transform: translate(-0.125rem, 0);
+  }
+  22% {
+    clip-path: inset(12% 0 72% 0);
+    transform: translate(0.125rem, 0);
+  }
+  47% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0);
+  }
+  72% {
+    clip-path: inset(42% 0 42% 0);
+    transform: translate(-0.1875rem, 0);
+  }
+  100% {
+    clip-path: inset(58% 0 22% 0);
+    transform: translate(-0.125rem, 0);
+  }
+}
+
+@keyframes telebridge-title-glitch-red {
+  0% {
+    clip-path: inset(0 0 72% 0);
+    transform: translate(-0.125rem, 0);
+  }
+  28% {
+    clip-path: inset(40% 0 36% 0);
+    transform: translate(0.0625rem, 0);
+  }
+  52% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0);
+  }
+  76% {
+    clip-path: inset(66% 0 12% 0);
+    transform: translate(-0.1875rem, 0);
+  }
+  100% {
+    clip-path: inset(0 0 72% 0);
+    transform: translate(-0.125rem, 0);
+  }
+}
+
+@keyframes telebridge-title-glitch-cyan {
+  0% {
+    clip-path: inset(62% 0 20% 0);
+    transform: translate(0.125rem, 0);
+  }
+  28% {
+    clip-path: inset(16% 0 70% 0);
+    transform: translate(-0.0625rem, 0);
+  }
+  52% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0);
+  }
+  76% {
+    clip-path: inset(40% 0 44% 0);
+    transform: translate(0.1875rem, 0);
+  }
+  100% {
+    clip-path: inset(62% 0 20% 0);
+    transform: translate(0.125rem, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #logo::before,
+  #logo::after,
+  #auth-phone-number-form h1[data-text]::before,
+  #auth-phone-number-form h1[data-text]::after,
+  #auth-qr-form h1[data-text]::before,
+  #auth-qr-form h1[data-text]::after {
+    animation: none;
   }
 }
