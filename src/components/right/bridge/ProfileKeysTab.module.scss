@@ -1,0 +1,120 @@
+.root {
+  padding: 0.75rem 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.statusSection {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background-color: var(--color-background-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge {
+  padding: 0.125rem 0.625rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
+
+.badgeUnlocked {
+  background-color: var(--color-green);
+  color: var(--color-white);
+}
+
+.badgeLocked {
+  background-color: var(--color-text-secondary);
+  color: var(--color-white);
+}
+
+.badgeMuted {
+  background-color: var(--color-background);
+  color: var(--color-text-secondary);
+  border: 0.0625rem solid var(--color-borders);
+}
+
+.statusLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.625rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.statusLabel {
+  color: var(--color-text-secondary);
+}
+
+.statusValue {
+  font-family: var(--font-family-monospace, monospace);
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  text-align: end;
+  word-break: break-all;
+}
+
+.banner {
+  margin: 0.375rem 0 0;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  background-color: var(--color-background);
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.devToolsPlaceholder {
+  margin-top: 0.5rem;
+}
+
+.importTextarea {
+  width: 100%;
+  min-height: 8rem;
+  padding: 0.5rem 0.625rem;
+  border: 0.0625rem solid var(--color-borders);
+  border-radius: 0.5rem;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family-monospace, monospace);
+  font-size: 0.8125rem;
+  resize: vertical;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
