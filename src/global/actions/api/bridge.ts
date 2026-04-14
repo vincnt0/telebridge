@@ -30,6 +30,15 @@ import { pause, rafPromise } from '../../../util/schedulers';
 import { addActionHandler, getActions, getGlobal, setGlobal } from '../../index';
 import { selectChat } from '../../selectors';
 
+/**
+ * In-memory queue of `tb1.kx` messages that arrived before the sender's
+ * identity was pinned. Keyed by senderId; replayed by
+ * `bridgeStoreContactPrekey` once the pinning message (tb1.pk or in-person
+ * bundle scan) lands. Not persisted — kx is short-lived on the wire and a
+ * re-publish is cheap. Cleared on `bridgeLock`.
+ */
+const pendingKxBySenderId = new Map<string, { chatId: string; wireText: string }>();
+
 addActionHandler('bridgeSetDecryptedText', (global, actions, payload): ActionReturnType => {
   const { messageKey, text } = payload;
   // Skip writes if the cached entry already matches — spare a needless re-render.
@@ -167,6 +176,10 @@ addActionHandler('bridgeLock', async (global): Promise<void> => {
   await rafPromise();
 
   getTelebridgeVault().lock();
+
+  // Queued kx pointers are only meaningful while unlocked — drop them so a
+  // subsequent unlock starts from a clean slate.
+  pendingKxBySenderId.clear();
 
   global = getGlobal();
   setGlobal({
@@ -318,6 +331,19 @@ addActionHandler('bridgeStoreContactPrekey', async (global, actions, payload): P
         },
       },
     });
+
+    // Replay any kx we parked while this sender was unpinned. Now that the
+    // pk has landed and the identity is on record, the responder can run
+    // the strict-equality gate and derive the chat key.
+    const pending = pendingKxBySenderId.get(senderId);
+    if (pending) {
+      pendingKxBySenderId.delete(senderId);
+      getActions().bridgeReceiveChatKey({
+        chatId: pending.chatId,
+        senderId,
+        wireText: pending.wireText,
+      });
+    }
   } catch (err) {
     setGlobal(setError(getGlobal(), err));
   }
@@ -422,8 +448,35 @@ addActionHandler('bridgeReceiveChatKey', async (global, actions, payload): Promi
       throw new Error('Bridge is locked');
     }
 
+    const pinnedSenderIdKey = vault.getContactKey(senderId)?.publicKey;
     const myIdentity = vault.getIdentityKeyPair();
-    const result = await respondToKeyExchange(wireText, myIdentity, vault, senderId);
+    const result = await respondToKeyExchange(
+      wireText,
+      myIdentity,
+      vault,
+      senderId,
+      pinnedSenderIdKey,
+    );
+
+    if (result.status === 'needsPrekey') {
+      // Park the kx until a tb1.pk (or in-person bundle) pins this sender's
+      // identity. Newest wins: if a prior kx is still queued we replace it
+      // (the sender just re-issued). Cleared on bridgeLock.
+      pendingKxBySenderId.set(senderId, { chatId, wireText });
+      return;
+    }
+
+    if (result.status === 'identityMismatch') {
+      global = getGlobal();
+      setGlobal({
+        ...global,
+        bridge: {
+          ...global.bridge,
+          lastError: 'BridgeIdentityMismatch',
+        },
+      });
+      return;
+    }
 
     const persistedJson = await vault.storeChatKey(chatId, result.chatKey, result.keyId);
 

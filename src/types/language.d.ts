@@ -2105,6 +2105,7 @@ export interface LangPair {
   'BridgeUnverifiedBadge': undefined;
   'BridgeKeyChangedBadge': undefined;
   'BridgeNoContactKey': undefined;
+  'BridgeIdentityMismatch': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {

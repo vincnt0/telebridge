@@ -42,6 +42,21 @@ async function makeUnlockedState(): Promise<TelebridgeState> {
   return state;
 }
 
+/** Wraps respondToKeyExchange + asserts the 'ok' branch so test bodies can read .chatKey etc. */
+async function respondOk(
+  wire: string,
+  recipient: DecryptedIdentity,
+  state: TelebridgeState,
+  senderId: string,
+  pinnedSenderIdKey: Uint8Array,
+) {
+  const r = await respondToKeyExchange(wire, recipient, state, senderId, pinnedSenderIdKey);
+  if (r.status !== 'ok') {
+    throw new Error(`Expected ok, got ${r.status}`);
+  }
+  return r;
+}
+
 describe('respondToKeyExchange', () => {
   test('successfully unwraps chat key from valid KX message', async () => {
     const alice = makeIdentity();
@@ -50,11 +65,12 @@ describe('respondToKeyExchange', () => {
     const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const state = await makeUnlockedState();
 
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     expect(response.chatKey).toBeInstanceOf(Uint8Array);
@@ -68,11 +84,12 @@ describe('respondToKeyExchange', () => {
     const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const state = await makeUnlockedState();
 
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     const { constantTimeEqual } = await import('../../crypto/utils');
@@ -86,11 +103,12 @@ describe('respondToKeyExchange', () => {
     const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const state = await makeUnlockedState();
 
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     expect(response.keyId).toBe(initiation.keyId);
@@ -113,7 +131,7 @@ describe('respondToKeyExchange', () => {
     const state = await makeUnlockedState();
 
     await expect(
-      respondToKeyExchange(tampered, bob, state, 'alice-user-id'),
+      respondToKeyExchange(tampered, bob, state, 'alice-user-id', alice.ed25519PublicKey),
     ).rejects.toThrow(/signature verification failed/);
   });
 
@@ -148,7 +166,7 @@ describe('respondToKeyExchange', () => {
     const state = await makeUnlockedState();
 
     await expect(
-      respondToKeyExchange(tamperedWire, bob, state, 'alice-user-id'),
+      respondToKeyExchange(tamperedWire, bob, state, 'alice-user-id', alice.ed25519PublicKey),
     ).rejects.toThrow(/signature verification failed/);
   });
 
@@ -159,18 +177,19 @@ describe('respondToKeyExchange', () => {
     const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const state = await makeUnlockedState();
 
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     expect(response.tofuStatus).toBe('new');
     expect(response.senderPublicKey).toEqual(alice.ed25519PublicKey);
   });
 
-  test('TOFU: second exchange with same key is unchanged', async () => {
+  test('second exchange with same pinned key succeeds', async () => {
     const alice = makeIdentity();
     const bob = makeIdentity();
 
@@ -178,30 +197,50 @@ describe('respondToKeyExchange', () => {
 
     // First exchange
     const init1 = await initiateKeyExchange(alice, bob.x25519PublicKey);
-    const resp1 = await respondToKeyExchange(init1.wireMessage, bob, state, 'alice-user-id');
+    const resp1 = await respondOk(init1.wireMessage, bob, state, 'alice-user-id', alice.ed25519PublicKey);
     expect(resp1.tofuStatus).toBe('new');
 
     // Second exchange with same identity
     const init2 = await initiateKeyExchange(alice, bob.x25519PublicKey);
-    const resp2 = await respondToKeyExchange(init2.wireMessage, bob, state, 'alice-user-id');
+    const resp2 = await respondOk(init2.wireMessage, bob, state, 'alice-user-id', alice.ed25519PublicKey);
     expect(resp2.tofuStatus).toBe('unchanged');
   });
 
-  test('TOFU: exchange with different key triggers changed status', async () => {
+  test('returns identityMismatch when wire key differs from pinned', async () => {
     const alice1 = makeIdentity();
     const alice2 = makeIdentity(); // Different identity
     const bob = makeIdentity();
 
     const state = await makeUnlockedState();
 
-    // First exchange with alice1's identity
-    const init1 = await initiateKeyExchange(alice1, bob.x25519PublicKey);
-    await respondToKeyExchange(init1.wireMessage, bob, state, 'alice-user-id');
-
-    // Second exchange with alice2's identity (different ed25519 key)
+    // alice1 is pinned (e.g. from a prior tb1.pk). alice2 then attempts a kx
+    // claiming to be the same Telegram user — must be rejected.
     const init2 = await initiateKeyExchange(alice2, bob.x25519PublicKey);
-    const resp2 = await respondToKeyExchange(init2.wireMessage, bob, state, 'alice-user-id');
-    expect(resp2.tofuStatus).toBe('changed');
+    const resp2 = await respondToKeyExchange(
+      init2.wireMessage,
+      bob,
+      state,
+      'alice-user-id',
+      alice1.ed25519PublicKey,
+    );
+    expect(resp2.status).toBe('identityMismatch');
+  });
+
+  test('returns needsPrekey when no pinned key is provided', async () => {
+    const alice = makeIdentity();
+    const bob = makeIdentity();
+
+    const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
+    const state = await makeUnlockedState();
+
+    const resp = await respondToKeyExchange(
+      initiation.wireMessage,
+      bob,
+      state,
+      'alice-user-id',
+      undefined,
+    );
+    expect(resp.status).toBe('needsPrekey');
   });
 
   test('wrong recipient cannot decrypt', async () => {
@@ -216,7 +255,7 @@ describe('respondToKeyExchange', () => {
     // Charlie tries to respond (wrong x25519 private key)
     // The ECDH will produce a different shared secret → decryption will fail
     await expect(
-      respondToKeyExchange(initiation.wireMessage, charlie, state, 'alice-user-id'),
+      respondToKeyExchange(initiation.wireMessage, charlie, state, 'alice-user-id', alice.ed25519PublicKey),
     ).rejects.toThrow();
   });
 });

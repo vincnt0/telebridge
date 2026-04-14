@@ -39,6 +39,21 @@ async function makeUnlockedState(): Promise<TelebridgeState> {
   return state;
 }
 
+/** Wraps respondToKeyExchange + asserts the 'ok' branch so test bodies can read .chatKey etc. */
+async function respondOk(
+  wire: string,
+  recipient: DecryptedIdentity,
+  state: TelebridgeState,
+  senderId: string,
+  pinnedSenderIdKey: Uint8Array,
+) {
+  const r = await respondToKeyExchange(wire, recipient, state, senderId, pinnedSenderIdKey);
+  if (r.status !== 'ok') {
+    throw new Error(`Expected ok, got ${r.status}`);
+  }
+  return r;
+}
+
 describe('Key Exchange Roundtrip', () => {
   test('Alice initiates → Bob responds → both derive identical chat key', async () => {
     const alice = makeIdentity();
@@ -49,11 +64,12 @@ describe('Key Exchange Roundtrip', () => {
 
     // Bob receives the wire message and responds
     const state = await makeUnlockedState();
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     // Both sides should have byte-identical chat keys
@@ -69,11 +85,12 @@ describe('Key Exchange Roundtrip', () => {
     const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const state = await makeUnlockedState();
 
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     expect(response.keyId).toBe(initiation.keyId);
@@ -88,11 +105,12 @@ describe('Key Exchange Roundtrip', () => {
 
     for (let i = 0; i < 3; i++) {
       const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
-      const response = await respondToKeyExchange(
+      const response = await respondOk(
         initiation.wireMessage,
         bob,
         state,
         'alice-user-id',
+        alice.ed25519PublicKey,
       );
 
       expect(constantTimeEqual(initiation.chatKey, response.chatKey)).toBe(true);
@@ -112,22 +130,24 @@ describe('Key Exchange Roundtrip', () => {
     // Alice → Bob
     const aliceInit = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const bobState = await makeUnlockedState();
-    const bobResponse = await respondToKeyExchange(
+    const bobResponse = await respondOk(
       aliceInit.wireMessage,
       bob,
       bobState,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
     expect(constantTimeEqual(aliceInit.chatKey, bobResponse.chatKey)).toBe(true);
 
     // Bob → Alice
     const bobInit = await initiateKeyExchange(bob, alice.x25519PublicKey);
     const aliceState = await makeUnlockedState();
-    const aliceResponse = await respondToKeyExchange(
+    const aliceResponse = await respondOk(
       bobInit.wireMessage,
       alice,
       aliceState,
       'bob-user-id',
+      bob.ed25519PublicKey,
     );
     expect(constantTimeEqual(bobInit.chatKey, aliceResponse.chatKey)).toBe(true);
 
@@ -142,11 +162,12 @@ describe('Key Exchange Roundtrip', () => {
     const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const state = await makeUnlockedState();
 
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     expect(response.senderPublicKey).toEqual(alice.ed25519PublicKey);
@@ -161,11 +182,12 @@ describe('Key Exchange Roundtrip', () => {
     const initiation = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const state = await makeUnlockedState();
 
-    const response = await respondToKeyExchange(
+    const response = await respondOk(
       initiation.wireMessage,
       bob,
       state,
       'alice-user-id',
+      alice.ed25519PublicKey,
     );
 
     // Alice encrypts a message with the shared chat key

@@ -15,8 +15,9 @@ export interface KeyExchangeInitiation {
   keyId: string;
 }
 
-/** Result of responding to an incoming key exchange */
-export interface KeyExchangeResponse {
+/** Successful result of responding to an incoming key exchange */
+export interface KeyExchangeResponseOk {
+  status: 'ok';
   /** The unwrapped 32-byte AES-256 chat key */
   chatKey: Uint8Array;
   /** 4-byte key identifier as hex string */
@@ -26,6 +27,21 @@ export interface KeyExchangeResponse {
   /** TOFU status: 'new' = first contact, 'changed' = key changed, 'unchanged' = same key */
   tofuStatus: 'new' | 'changed' | 'unchanged';
 }
+
+/**
+ * Discriminated result of responding to an incoming key exchange.
+ *
+ * - `ok`: handshake verified against a pinned identity; chat key derived.
+ * - `needsPrekey`: no pinned identity for this sender yet; caller should
+ *   queue the raw kx and retry once a `tb1.pk` (or in-person bundle) pins the
+ *   sender's Ed25519 key.
+ * - `identityMismatch`: wire-embedded sender key differs from the pinned
+ *   key — likely race-to-pin MITM; refuse without derivation.
+ */
+export type KeyExchangeResponse =
+  | KeyExchangeResponseOk
+  | { status: 'needsPrekey' }
+  | { status: 'identityMismatch' };
 
 /** Configuration for automatic key rotation thresholds */
 export interface RotationConfig {

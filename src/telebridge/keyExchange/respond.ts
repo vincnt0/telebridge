@@ -12,6 +12,7 @@
 import {
   computeSharedSecret,
   concatBytes,
+  constantTimeEqual,
   decrypt,
   encodeUtf8,
   fromBase64,
@@ -56,14 +57,22 @@ function splitEncryptedChatKey(bytes: Uint8Array): EncryptedPayload {
 /**
  * Respond to an incoming key exchange handshake.
  *
- * Decodes the wire message, verifies the sender's signature,
+ * Decodes the wire message, verifies the sender's signature against the
+ * caller-supplied pinned identity key (NOT the key embedded in the message),
  * performs ECDH to derive the wrapping key, and unwraps the chat key.
+ *
+ * The pinned key must be established out-of-band — either via a prior `tb1.pk`
+ * publication or an in-person bundle scan. Passing `undefined` yields a
+ * `needsPrekey` result so the caller can queue the kx until the pinning
+ * message lands; passing a key that differs byte-for-byte from the one on
+ * the wire yields `identityMismatch` (refuse: likely race-to-pin MITM).
  *
  * @param wireMessage - The `tb1.kx` wire-format string
  * @param myIdentity - Responder's decrypted identity keys (needs x25519PrivateKey)
  * @param state - TelebridgeState for TOFU contact key storage
  * @param senderId - Telegram user ID of the sender (for contact tracking)
- * @returns The unwrapped chat key, sender info, and TOFU status
+ * @param pinnedSenderIdKey - Previously-pinned Ed25519 identity for this sender, or undefined
+ * @returns Discriminated result: success chat key, or needsPrekey/identityMismatch
  * @throws If signature verification fails or decryption fails
  */
 export async function respondToKeyExchange(
@@ -71,28 +80,38 @@ export async function respondToKeyExchange(
   myIdentity: { x25519PrivateKey: Uint8Array },
   state: TelebridgeState,
   senderId: string,
+  pinnedSenderIdKey: Uint8Array | undefined,
 ): Promise<KeyExchangeResponse> {
   // 1. Decode the wire message
   const payload: KeyExchangePayload = decodeKeyExchange(wireMessage);
 
-  // 2. Reconstruct signable payload for verification:
-  //    senderIdKey ‖ ephemeralX25519 ‖ encryptedChatKey
+  // 2. Gate on pinned identity — refuse to derive a chat key from an
+  //    unverified sender key. An attacker who delivers `tb1.kx` before the
+  //    legitimate contact's `tb1.pk` would otherwise silently TOFU-pin.
+  if (!pinnedSenderIdKey) {
+    return { status: 'needsPrekey' };
+  }
+
+  // 3. Strict equality: the wire-embedded key MUST match the pinned key.
+  if (!constantTimeEqual(pinnedSenderIdKey, payload.senderIdKey)) {
+    return { status: 'identityMismatch' };
+  }
+
+  // 4. Reconstruct signable payload and verify signature AGAINST the pinned
+  //    key. The byte-equality check above makes this load-bearing: even though
+  //    the bytes are equal in the happy path, verifying against the pinned
+  //    reference (not the wire-embedded copy) is the correct semantic.
   const signablePayload = concatBytes(
     payload.senderIdKey,
     payload.ephemeralX25519,
     payload.encryptedChatKey,
   );
-
-  // 3. Verify Ed25519 signature
-  const isValid = verify(signablePayload, payload.signature, payload.senderIdKey);
+  const isValid = verify(signablePayload, payload.signature, pinnedSenderIdKey);
   if (!isValid) {
     throw new Error('Key exchange signature verification failed — message may be tampered');
   }
 
-  // 4. Store/verify sender's identity key via TOFU
-  //    The sender's X25519 identity key may come from a prior prekey message.
-  //    If we already have a contact record, preserve their stored X25519 key.
-  //    Otherwise use a zero placeholder until their prekey is received.
+  // 5. Refresh TOFU record — preserve prior X25519 public key if already pinned.
   const existingContact = state.getContactKey(senderId);
   const senderX25519ForContact = existingContact
     ? fromBase64(existingContact.x25519PublicKey)
@@ -104,13 +123,13 @@ export async function respondToKeyExchange(
     senderX25519ForContact,
   );
 
-  // 5. Perform ECDH: my static X25519 private × sender's ephemeral X25519 public
+  // 6. Perform ECDH: my static X25519 private × sender's ephemeral X25519 public
   const sharedSecret = computeSharedSecret(myIdentity.x25519PrivateKey, payload.ephemeralX25519);
 
-  // 6. Derive wrapping key via HKDF-SHA256 (identical info string as initiator)
+  // 7. Derive wrapping key via HKDF-SHA256 (identical info string as initiator)
   const wrappingKey = deriveKey(sharedSecret, undefined, HKDF_INFO);
 
-  // 7. Split and decrypt the wrapped payload (keyId + chatKey)
+  // 8. Split and decrypt the wrapped payload (keyId + chatKey)
   const encryptedPayload = splitEncryptedChatKey(payload.encryptedChatKey);
   const wrappedPlaintext = await decrypt(encryptedPayload, wrappingKey);
 
@@ -126,11 +145,12 @@ export async function respondToKeyExchange(
   const chatKey = wrappedPlaintext.slice(KEY_ID_SIZE);
   const keyId = Array.from(keyIdBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 
-  // 8. Wipe wrapping key and shared secret
+  // 9. Wipe wrapping key and shared secret
   secureWipe(wrappingKey);
   secureWipe(sharedSecret);
 
   return {
+    status: 'ok',
     chatKey,
     keyId,
     senderPublicKey: payload.senderIdKey,

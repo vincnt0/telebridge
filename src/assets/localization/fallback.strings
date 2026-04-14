@@ -2853,3 +2853,4 @@
 "BridgeUnverifiedBadge" = "Not verified";
 "BridgeKeyChangedBadge" = "Key changed — reverify";
 "BridgeNoContactKey" = "No identity key known for this contact yet. Start encryption first.";
+"BridgeIdentityMismatch" = "Identity mismatch — refusing key exchange. The key on the wire does not match this contact's pinned key.";
