@@ -3202,6 +3202,10 @@ export interface ActionPayloads {
   bridgeMarkAsymmetricDecrypted: {
     messageKey: string;
   };
+  bridgeToggleSecuredMode: {
+    chatId: string;
+  } & WithTabId;
+  bridgeToggleDebugMode: WithTabId | undefined;
 }
 
 export interface RequiredActionPayloads {

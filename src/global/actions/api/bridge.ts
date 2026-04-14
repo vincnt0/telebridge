@@ -986,6 +986,46 @@ addActionHandler('bridgeMarkAsymmetricDecrypted', (global, actions, payload): Ac
   };
 });
 
+addActionHandler('bridgeToggleSecuredMode', (global, actions, payload): ActionReturnType => {
+  const { chatId } = payload;
+  // Belt-and-braces: composer should hide the toggle when the vault is locked
+  // or no peer key is pinned, but ignore stray dispatches anyway so the UI
+  // can't put state into a "secured-on without key" state.
+  if (!global.bridge.isUnlocked) return undefined;
+  if (!global.bridge.contactKeyIds[chatId]) {
+    return {
+      ...global,
+      bridge: { ...global.bridge, lastError: 'BridgeSendSecuredNoPeerKey' },
+    };
+  }
+
+  if (global.bridge.securedModeByChatId[chatId]) {
+    const { [chatId]: _removed, ...rest } = global.bridge.securedModeByChatId;
+    return {
+      ...global,
+      bridge: { ...global.bridge, securedModeByChatId: rest },
+    };
+  }
+
+  return {
+    ...global,
+    bridge: {
+      ...global.bridge,
+      securedModeByChatId: {
+        ...global.bridge.securedModeByChatId,
+        [chatId]: true,
+      },
+    },
+  };
+});
+
+addActionHandler('bridgeToggleDebugMode', (global): ActionReturnType => {
+  return {
+    ...global,
+    bridge: { ...global.bridge, isDebugMode: !global.bridge.isDebugMode },
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

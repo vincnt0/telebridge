@@ -108,6 +108,8 @@ export type BridgeState = {
   decryptedByKey: Record<string, string>;
   /** True while an async vault action (setup / unlock / change password) is in flight. Runtime-only. */
   isBusy?: boolean;
+  /** Developer-mode master toggle. When true, the Keys UI surfaces extra testing controls. */
+  isDebugMode: boolean;
   /** Last user-facing error from a vault action (e.g., wrong password). Runtime-only. Cleared on next attempt. */
   lastError?: string;
   /** Chat IDs to which we have already published our prekey (`tb1.pk`). */
@@ -116,6 +118,12 @@ export type BridgeState = {
   contactKeyIds: Record<string, true>;
   /** Chat IDs with an in-flight key exchange handshake — drives "waiting" UI state. */
   kxInProgressChatIds: Record<string, true>;
+  /**
+   * Sparse set of chat IDs where the user has toggled "encrypted mode ON"
+   * for the composer. Absent key = off; present with `true` = on. Drives the
+   * per-chat secured-send UI affordance independently of vault/key state.
+   */
+  securedModeByChatId: Record<string, true>;
   /** TOFU status from the last contact-key store, keyed by contact (user) ID. Runtime-only. */
   contactTofuStatusByContactId: Record<string, 'new' | 'changed' | 'unchanged' | 'verified'>;
   /**
