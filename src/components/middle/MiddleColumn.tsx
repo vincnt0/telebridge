@@ -80,6 +80,7 @@ import useWindowSize from '../../hooks/window/useWindowSize';
 import usePinnedMessage from './hooks/usePinnedMessage';
 import useFluidBackgroundFilter from './message/hooks/useFluidBackgroundFilter';
 
+import BridgeIdentityMismatchDialog from '../bridge/BridgeIdentityMismatchDialog';
 import StartEncryptedChatBanner from '../bridge/StartEncryptedChatBanner';
 import Composer from '../common/Composer';
 import PrivacySettingsNoticeModal from '../common/PrivacySettingsNoticeModal.async';
@@ -556,6 +557,7 @@ function MiddleColumn({
             {renderingChatId && (
               <StartEncryptedChatBanner chatId={renderingChatId} />
             )}
+            <BridgeIdentityMismatchDialog />
             <Transition
               name={resolveTransitionName(
                 'slide',

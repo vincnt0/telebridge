@@ -2110,6 +2110,44 @@ export interface LangPair {
   'BridgeScanMatchedArchived': undefined;
   'BridgeImportDuplicate': undefined;
   'BridgeImportInvalid': undefined;
+  'BridgeContactsSectionTitle': undefined;
+  'BridgeContactsEmpty': undefined;
+  'BridgeContactKeyOriginTofu': undefined;
+  'BridgeContactKeyOriginInPerson': undefined;
+  'BridgeContactKeyOriginPostHocQr': undefined;
+  'BridgeContactKeyOriginImported': undefined;
+  'BridgeContactKeyActiveBadge': undefined;
+  'BridgeContactKeyArchivedBadge': undefined;
+  'BridgeContactKeySetActive': undefined;
+  'BridgeContactKeyArchive': undefined;
+  'BridgeContactKeyDelete': undefined;
+  'BridgeContactKeyExportQr': undefined;
+  'BridgeContactKeyExportText': undefined;
+  'BridgeContactKeyFirstSeenLabel': undefined;
+  'BridgeContactKeyLastUsedLabel': undefined;
+  'BridgeContactKeyIdLabel': undefined;
+  'BridgeContactImportButton': undefined;
+  'BridgeContactImportDialogTitle': undefined;
+  'BridgeContactImportPlaceholder': undefined;
+  'BridgeContactImportSubmit': undefined;
+  'BridgeContactRevokeButton': undefined;
+  'BridgeContactRevokeConfirm': undefined;
+  'BridgeContactDeleteActiveConfirm': undefined;
+  'BridgeContactExportCopiedToast': undefined;
+  'BridgeScanMenuItem': undefined;
+  'BridgeShowMyQrMenuItem': undefined;
+  'BridgeScannerTitle': undefined;
+  'BridgeScannerPermissionDenied': undefined;
+  'BridgeScannerPasteFallbackPlaceholder': undefined;
+  'BridgeScannerPasteButton': undefined;
+  'BridgeShowMyQrTitle': undefined;
+  'BridgeShowMyQrFingerprintLabel': undefined;
+  'BridgeShowMyQrUnlockRequired': undefined;
+  'BridgeMismatchArchivedTitle': undefined;
+  'BridgeMismatchNewInactiveTitle': undefined;
+  'BridgeMismatchActivateNew': undefined;
+  'BridgeMismatchReactivate': undefined;
+  'BridgeMismatchKeepCurrent': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -3676,6 +3714,12 @@ export interface LangPairWithVariables<V = LangVariable> {
   'BridgeScanNewKeyInactive': {
     'name': V;
   };
+  'BridgeMismatchArchivedText': {
+    'name': V;
+  };
+  'BridgeMismatchNewInactiveText': {
+    'name': V;
+  };
 }
 
 export interface LangPairPlural {
@@ -4148,15 +4192,6 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
   };
   'BridgeChatKeysCount': {
     'count': V;
-  };
-  'BridgeScanFresh': {
-    'name': V;
-  };
-  'BridgeScanMatchedActive': {
-    'name': V;
-  };
-  'BridgeScanNewKeyInactive': {
-    'name': V;
   };
 }
 export type RegularLangKey = keyof LangPair;

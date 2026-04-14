@@ -142,7 +142,9 @@
     "opus-recorder": "github:Ajaxy/opus-recorder#116830a",
     "os-browserify": "^0.3.0",
     "path-browserify": "^1.0.1",
-    "qr-code-styling": "^1.9.2"
+    "qr-code-styling": "^1.9.2",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3"
   },
   "browserslist": [
     "baseline widely available"

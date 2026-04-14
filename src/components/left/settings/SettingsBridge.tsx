@@ -12,6 +12,7 @@ import ChangeBridgePasswordDialog from '../../bridge/ChangeBridgePasswordDialog'
 import SetupBridgeDialog from '../../bridge/SetupBridgeDialog';
 import UnlockBridgeDialog from '../../bridge/UnlockBridgeDialog';
 import Button from '../../ui/Button';
+import SettingsBridgeContacts from './SettingsBridgeContacts';
 
 import styles from './SettingsBridge.module.scss';
 
@@ -108,6 +109,10 @@ const SettingsBridge = ({
           </Button>
         )}
       </div>
+
+      {isInitialized && isUnlocked && (
+        <SettingsBridgeContacts isUnlocked={isUnlocked} />
+      )}
 
       <SetupBridgeDialog isOpen={isSetupOpen} onClose={closeSetup} />
       <UnlockBridgeDialog isOpen={isUnlockOpen} onClose={closeUnlock} />

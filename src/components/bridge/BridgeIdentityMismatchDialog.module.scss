@@ -1,0 +1,23 @@
+.modal {
+  :global(.modal-dialog) {
+    max-width: 24rem;
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+}
+
+.description {
+  margin: 0 0 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

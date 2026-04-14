@@ -18,6 +18,8 @@ import useLastCallback from '../../hooks/useLastCallback';
 import Icon from '../common/icons/Icon';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
+import BridgeIdentityQrView from './BridgeIdentityQrView';
+import BridgeScannerView from './BridgeScannerView';
 
 import styles from './BridgeChatActionsDialog.module.scss';
 
@@ -26,7 +28,7 @@ const QR_MUTATION_DURATION = 50;
 const SAFETY_NUMBER_GROUP_SIZE = 5;
 const SAFETY_NUMBER_GROUPS = 12;
 
-type ViewMode = 'menu' | 'verify' | 'confirmRemove';
+type ViewMode = 'menu' | 'verify' | 'confirmRemove' | 'scan' | 'showMyQr';
 
 type OwnProps = {
   isOpen: boolean;
@@ -61,7 +63,9 @@ const BridgeChatActionsDialog = ({
   isBusy,
   onClose,
 }: OwnProps & StateProps) => {
-  const { bridgeRemoveChatKey, bridgeVerifyContact } = getActions();
+  const {
+    bridgeRemoveChatKey, bridgeVerifyContact, bridgeApplyInPersonScan, showNotification,
+  } = getActions();
   const lang = useLang();
 
   const [view, setView] = useState<ViewMode>('menu');
@@ -133,9 +137,23 @@ const BridgeChatActionsDialog = ({
 
   const handleOpenVerify = useLastCallback(() => setView('verify'));
   const handleOpenConfirmRemove = useLastCallback(() => setView('confirmRemove'));
+  const handleOpenScan = useLastCallback(() => setView('scan'));
+  const handleOpenShowMyQr = useLastCallback(() => {
+    if (!isUnlocked) {
+      showNotification({ message: lang('BridgeShowMyQrUnlockRequired') });
+      onClose();
+      return;
+    }
+    setView('showMyQr');
+  });
   const handleBackToMenu = useLastCallback(() => {
     setIsQrMounted(false);
     setView('menu');
+  });
+
+  const handleBundleDetected = useLastCallback((bundleText: string) => {
+    bridgeApplyInPersonScan({ peerUserId: chatId, bundleText });
+    onClose();
   });
 
   const handleMarkVerified = useLastCallback(() => {
@@ -164,7 +182,21 @@ const BridgeChatActionsDialog = ({
     ? lang('BridgeVerifyContactTitle')
     : view === 'confirmRemove'
       ? lang('BridgeRemoveKeyTitle')
-      : lang('BridgeEncryptedChatMenuTitle');
+      : view === 'showMyQr'
+        ? lang('BridgeShowMyQrTitle')
+        : view === 'scan'
+          ? lang('BridgeScannerTitle')
+          : lang('BridgeEncryptedChatMenuTitle');
+
+  if (view === 'scan') {
+    return (
+      <BridgeScannerView
+        isOpen={isOpen}
+        onBundleDetected={handleBundleDetected}
+        onCancel={handleBackToMenu}
+      />
+    );
+  }
 
   return (
     <Modal
@@ -188,6 +220,22 @@ const BridgeChatActionsDialog = ({
           >
             <Icon name="check" className={styles.menuItemIcon} />
             <span>{lang('BridgeVerifyContactMenuItem')}</span>
+          </button>
+          <button
+            type="button"
+            className={styles.menuItem}
+            onClick={handleOpenScan}
+          >
+            <Icon name="camera" className={styles.menuItemIcon} />
+            <span>{lang('BridgeScanMenuItem')}</span>
+          </button>
+          <button
+            type="button"
+            className={styles.menuItem}
+            onClick={handleOpenShowMyQr}
+          >
+            <Icon name="eye" className={styles.menuItemIcon} />
+            <span>{lang('BridgeShowMyQrMenuItem')}</span>
           </button>
           <button
             type="button"
@@ -219,6 +267,17 @@ const BridgeChatActionsDialog = ({
             </Button>
             <Button color="primary" onClick={handleMarkVerified} disabled={isBusy}>
               {lang('BridgeMarkVerifiedButton')}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {view === 'showMyQr' && (
+        <div className={styles.verify}>
+          <BridgeIdentityQrView />
+          <div className={styles.verifyActions}>
+            <Button color="translucent" onClick={handleBackToMenu}>
+              {lang('Back')}
             </Button>
           </div>
         </div>
