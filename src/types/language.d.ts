@@ -2155,6 +2155,44 @@ export interface LangPair {
   'BridgeMismatchActivateNew': undefined;
   'BridgeMismatchReactivate': undefined;
   'BridgeMismatchKeepCurrent': undefined;
+  'BridgeHeaderMenuAriaLabel': undefined;
+  'BridgeHeaderMenuToggleOn': undefined;
+  'BridgeHeaderMenuToggleOff': undefined;
+  'BridgeHeaderMenuToggleUnavailable': undefined;
+  'BridgeHeaderMenuViewKeys': undefined;
+  'BridgeHeaderMenuOpenSettings': undefined;
+  'BridgeSecuredModeEnabled': undefined;
+  'BridgeSecuredModeDisabled': undefined;
+  'BridgeSendPlainMenuItem': undefined;
+  'ProfileTabKeys': undefined;
+  'BridgeKeysTabEmptyTitle': undefined;
+  'BridgeKeysTabEmptyText': undefined;
+  'BridgeKeysTabActiveSection': undefined;
+  'BridgeKeysTabArchiveSection': undefined;
+  'BridgeKeysTabKeyId': undefined;
+  'BridgeKeysTabFirstSeen': undefined;
+  'BridgeKeysTabLastUsed': undefined;
+  'BridgeKeysTabOrigin': undefined;
+  'BridgeKeysTabNoLastUsed': undefined;
+  'BridgeKeysTabImportButton': undefined;
+  'BridgeKeysTabScanButton': undefined;
+  'BridgeKeysTabShowMyQrButton': undefined;
+  'BridgeKeysTabChatKeySection': undefined;
+  'BridgeKeysTabChatKeyNone': undefined;
+  'BridgeKeysTabChatKeyKxInProgress': undefined;
+  'BridgeKeysTabDevToolsSection': undefined;
+  'BridgeKeysTabDevToolsHint': undefined;
+  'BridgeKeysTabDevToolsSetKeyButton': undefined;
+  'BridgeKeysTabDevToolsDialogTitle': undefined;
+  'BridgeKeysTabDevToolsDialogText': undefined;
+  'BridgeKeysTabDevToolsPlaceholder': undefined;
+  'BridgeKeysTabDevToolsSubmit': undefined;
+  'BridgeKeysTabDevToolsErrorInvalid': undefined;
+  'BridgeKeysTabDevToolsErrorExists': undefined;
+  'BridgeKeysTabDevToolsErrorUnavailable': undefined;
+  'BridgeKeysTabDevToolsKeySet': undefined;
+  'BridgeDebugModeLabel': undefined;
+  'BridgeDebugModeDescription': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -3726,6 +3764,9 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'BridgeMismatchNewInactiveText': {
     'name': V;
+  };
+  'BridgeKeysTabChatKeyActive': {
+    'keyId': V;
   };
 }
 
