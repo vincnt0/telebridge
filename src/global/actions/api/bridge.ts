@@ -17,7 +17,13 @@
 
 import type { ActionReturnType, GlobalState } from '../../types';
 
-import { concatBytes, ed25519Sign } from '../../../telebridge/crypto';
+import {
+  concatBytes,
+  ed25519Sign,
+  encodeUtf8,
+  encryptForRecipient,
+  fromBase64,
+} from '../../../telebridge/crypto';
 import {
   decodeIdentityBundle,
   InvalidBundleError,
@@ -27,7 +33,7 @@ import {
 import { initiateKeyExchange, respondToKeyExchange } from '../../../telebridge/keyExchange';
 import { ContactTrustLevel } from '../../../telebridge/state/types';
 import { decodePrekeyPublication } from '../../../telebridge/protocol/decode';
-import { encodePrekeyPublication } from '../../../telebridge/protocol/encode';
+import { encodePrekeyPublication, encodeSecuredMessage } from '../../../telebridge/protocol/encode';
 import { InvalidSignatureError, verifyPrekeyBundle } from '../../../telebridge/protocol/verify';
 import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
 import { getTelebridgeVault } from '../../../telebridge/send';
@@ -856,6 +862,104 @@ addActionHandler('bridgeClearLastExport', (global): ActionReturnType => {
   return {
     ...global,
     bridge: { ...global.bridge, bridgeLastExport: undefined },
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Layer 4 — Send Secured (per-message asymmetric fan-out)
+// ---------------------------------------------------------------------------
+
+addActionHandler('bridgeSendSecured', async (global, actions, payload): Promise<void> => {
+  const { chatId, text, tabId = getCurrentTabId() } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    if (!isUserId(chatId)) {
+      // Group Secured Messaging is deferred per ARCHITECTURE.md Layer 4.
+      throw new Error('Send Secured only supports 1:1 chats');
+    }
+
+    // 1:1 chats: recipient user id === chat id.
+    const recipientId = chatId;
+    const recipientContact = vault.getContactKey(recipientId);
+    if (!recipientContact) {
+      global = getGlobal();
+      setGlobal({
+        ...global,
+        bridge: { ...global.bridge, lastError: 'BridgeSendSecuredNoPeerKey' },
+      });
+      return;
+    }
+
+    const recipientX25519 = fromBase64(recipientContact.x25519PublicKey);
+    const myIdentity = vault.getIdentityKeyPair();
+    const plaintextBytes = encodeUtf8(text);
+
+    // Envelope A: encrypt-to-recipient. Envelope B: encrypt-to-self so our
+    // other devices can read our own outgoing copy (§ARCHITECTURE Layer 4).
+    // Each call burns its own ephemeral X25519 keypair; no reuse.
+    const envelopeToRecipient = await encryptForRecipient(
+      plaintextBytes,
+      recipientX25519,
+      myIdentity.ed25519PrivateKey,
+    );
+    const envelopeToSelf = await encryptForRecipient(
+      plaintextBytes,
+      myIdentity.x25519PublicKey,
+      myIdentity.ed25519PrivateKey,
+    );
+
+    const wireToRecipient = encodeSecuredMessage(envelopeToRecipient);
+    const wireToSelf = encodeSecuredMessage(envelopeToSelf);
+
+    // Both sends use the canonical `messageList` shape — the 72763106b
+    // silent-drop regression was exactly a missing messageList field.
+    const sendActions = getActions();
+    sendActions.sendMessage({
+      messageList: { chatId, threadId: MAIN_THREAD_ID, type: 'thread' },
+      text: wireToRecipient,
+      tabId,
+    });
+    sendActions.sendMessage({
+      messageList: { chatId, threadId: MAIN_THREAD_ID, type: 'thread' },
+      text: wireToSelf,
+      tabId,
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeMarkAsymmetricFiltered', (global, actions, payload): ActionReturnType => {
+  const { messageKey } = payload;
+  if (global.bridge.filteredAsymmetricMessageIds[messageKey]) return undefined;
+  return {
+    ...global,
+    bridge: {
+      ...global.bridge,
+      filteredAsymmetricMessageIds: {
+        ...global.bridge.filteredAsymmetricMessageIds,
+        [messageKey]: true,
+      },
+    },
+  };
+});
+
+addActionHandler('bridgeMarkAsymmetricDecrypted', (global, actions, payload): ActionReturnType => {
+  const { messageKey } = payload;
+  if (global.bridge.asymmetricDecryptedMessageIds[messageKey]) return undefined;
+  return {
+    ...global,
+    bridge: {
+      ...global.bridge,
+      asymmetricDecryptedMessageIds: {
+        ...global.bridge.asymmetricDecryptedMessageIds,
+        [messageKey]: true,
+      },
+    },
   };
 });
 

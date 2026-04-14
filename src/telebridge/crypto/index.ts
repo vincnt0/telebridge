@@ -21,6 +21,15 @@ export { computeSharedSecret, generateKeyExchangeKeyPair } from './keyexchange';
 
 // HKDF-SHA256 key derivation
 export { deriveKey } from './kdf';
+export { HKDF_INFO } from './hkdfInfo';
+
+// Layer 4 asymmetric per-message encryption
+export {
+  decryptEnvelope,
+  decryptEnvelopeToText,
+  encryptForRecipient,
+} from './asymmetric';
+export type { DecryptEnvelopeResult } from './asymmetric';
 
 // Argon2id password hashing
 export { hashPassword } from './password';

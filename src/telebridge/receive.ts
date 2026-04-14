@@ -22,6 +22,8 @@ import type { ApiMessage } from '../api/types';
 import { getActions, getGlobal } from '../global/index';
 import { getMessageKey } from '../util/keys/messageKey';
 
+import { decryptEnvelopeToText } from './crypto/asymmetric';
+import { fromBase64 } from './crypto/utils';
 import { decryptSymmetricMessage } from './decrypt';
 import {
   decryptAfterDownload,
@@ -29,6 +31,7 @@ import {
   isEncryptedMedia,
 } from './media';
 import { getMediaChatId } from './mediaRegistry';
+import { decodeSecuredMessage } from './protocol/decode';
 import { isTelebridgeMachineMessage, isTelebridgeMessage } from './protocol';
 import { getTelebridgeVault } from './send';
 
@@ -39,6 +42,8 @@ const inflight = new Set<string>();
 const prekeyProcessed = new Set<string>(); // messageKey
 /** Message keys whose `tb1.kx.…` wire payload has already been dispatched. */
 const kxProcessed = new Set<string>();     // messageKey
+/** Message keys whose `tb1.a.…` envelope we've already triaged. */
+const asymmetricProcessed = new Set<string>(); // messageKey
 
 /**
  * Synchronous probe for the render path. Returns the plaintext if the
@@ -78,6 +83,10 @@ export function ensureDecryptedText(
   // their own dispatchers — they're not `tb1.s` ciphertext and would only
   // fail the symmetric decrypt path.
   if (encryptedText.startsWith('tb1.pk.') || encryptedText.startsWith('tb1.kx.')) return;
+  if (encryptedText.startsWith('tb1.a.')) {
+    ensureAsymmetricProcessed(chatId, messageKey, encryptedText, senderId);
+    return;
+  }
   if (inflight.has(messageKey)) return;
   if (getCachedDecryptedText(messageKey) !== undefined) return;
   if (!canDecryptNow(chatId, encryptedText)) return;
@@ -166,6 +175,8 @@ export function backfillDecryptsForAllChats(): void {
       // consume them; kx next so chat keys exist before decrypt attempts.
       ensurePrekeyProcessed(message);
       ensureKxProcessed(message);
+      // `ensureDecryptedText` internally routes tb1.a envelopes into
+      // `ensureAsymmetricProcessed`, so a single entry point covers both.
       ensureDecryptedText(chatId, getMessageKey(message), text, message.senderId);
     }
   }
@@ -221,6 +232,94 @@ export function ensureKxProcessed(message: ApiMessage): void {
     senderId: message.senderId,
     wireText: text,
   });
+}
+
+/**
+ * Triage an inbound `tb1.a` Secured-Message envelope.
+ *
+ * Two-message fan-out means every Send Secured produces one envelope for the
+ * recipient and one for the sender's other devices. Our job here is to
+ * identify which one we can open (GCM auth succeeds against our X25519 key)
+ * and — crucially — which one we can't. "Can't open" is not an error: it's
+ * the sibling copy meant for someone else's X25519 key. We flag those via
+ * `bridgeMarkAsymmetricFiltered` so the MessageList render filter hides them.
+ *
+ * No pinned contact key → refuse (invalidSignature path). TOFU-accepting
+ * per-message traffic from an unknown sender would let anyone on the network
+ * sign envelopes under an unverified identity and walk right through the
+ * GCM gate. This mirrors finding #2 from the 2026-04-14 code review.
+ *
+ * Deduped by `asymmetricProcessed`. Locked vault leaves the key unmarked so
+ * the unlock backfill retries.
+ */
+export function ensureAsymmetricProcessed(
+  chatId: string,
+  messageKey: string,
+  encryptedText: string,
+  senderId: string | undefined,
+): void {
+  if (!encryptedText.startsWith('tb1.a.')) return;
+  if (asymmetricProcessed.has(messageKey)) return;
+  if (getCachedDecryptedText(messageKey) !== undefined) return;
+  if (inflight.has(messageKey)) return;
+
+  const vault = getTelebridgeVault();
+  if (!vault.isInitialized() || vault.isLocked()) return;
+  if (!senderId) return;
+
+  // No pinned contact key → refuse (code-review finding #2: don't TOFU-accept
+  // per-message envelopes from unknown senders).
+  const contact = vault.getContactKey(senderId);
+  if (!contact) {
+    asymmetricProcessed.add(messageKey);
+    // Surface as invalidSignature via the existing MessageMeta warning slot —
+    // the MessageMeta `isTelebridgeFailed` check already fires on any tb1
+    // payload without `decryptedByKey`, so leaving the cache empty is enough.
+    return;
+  }
+
+  let payload;
+  try {
+    payload = decodeSecuredMessage(encryptedText);
+  } catch {
+    asymmetricProcessed.add(messageKey);
+    return;
+  }
+
+  asymmetricProcessed.add(messageKey);
+  inflight.add(messageKey);
+
+  void (async () => {
+    try {
+      const identity = vault.getIdentityKeyPair();
+      const senderEd25519 = fromBase64(contact.ed25519PublicKey);
+      const result = await decryptEnvelopeToText(
+        payload,
+        identity.x25519PrivateKey,
+        senderEd25519,
+      );
+
+      if (!result.ok) {
+        if (result.reason === 'notForMe') {
+          // Sibling envelope from the encrypt-to-self fan-out. Flag so the
+          // render filter hides it from the message list entirely.
+          getActions().bridgeMarkAsymmetricFiltered({ messageKey });
+        }
+        // invalidSignature falls through to the generic "tb1 without cached
+        // plaintext" UI — MessageMeta already renders a warning glyph there.
+        return;
+      }
+
+      // GCM + signature OK. Track separately so Golf can apply
+      // Send-Secured-specific styling; also stamp lastUsed since we just
+      // verified the sender's signature against the pinned key.
+      vault.bumpContactKeyLastUsed(senderId);
+      getActions().bridgeSetDecryptedText({ messageKey, text: result.text });
+      getActions().bridgeMarkAsymmetricDecrypted({ messageKey });
+    } finally {
+      inflight.delete(messageKey);
+    }
+  })();
 }
 
 // ---------------------------------------------------------------------------

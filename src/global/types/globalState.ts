@@ -119,6 +119,19 @@ export type BridgeState = {
   /** TOFU status from the last contact-key store, keyed by contact (user) ID. Runtime-only. */
   contactTofuStatusByContactId: Record<string, 'new' | 'changed' | 'unchanged' | 'verified'>;
   /**
+   * Runtime-only: message keys for incoming `tb1.a` envelopes whose GCM auth
+   * tag failed against our X25519 key (i.e. "not for me" — the sibling
+   * encrypt-to-self copy emitted by the sender for cross-device readability).
+   * Consumed by the MessageList render filter to hide these silently.
+   */
+  filteredAsymmetricMessageIds: Record<string, true>;
+  /**
+   * Runtime-only: message keys for incoming `tb1.a` envelopes that were
+   * successfully decrypted. Exposed so render code can distinguish
+   * Send-Secured bubbles (double-lock styling) from Layer-3 symmetric.
+   */
+  asymmetricDecryptedMessageIds: Record<string, true>;
+  /**
    * Single-slot signal for an in-person scan that needs user confirmation
    * (mismatch: archived-hit or new-key-added-inactive). Runtime-only; the
    * mismatch dialog reads and clears it. Newest wins — replaces any

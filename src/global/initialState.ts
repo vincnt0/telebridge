@@ -354,6 +354,8 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     contactKeyIds: {},
     kxInProgressChatIds: {},
     contactTofuStatusByContactId: {},
+    filteredAsymmetricMessageIds: {},
+    asymmetricDecryptedMessageIds: {},
   },
 };
 

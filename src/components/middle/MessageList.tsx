@@ -153,6 +153,10 @@ type StateProps = {
   isActive?: boolean;
   canManageBotForumTopics?: boolean;
   shouldScrollToBottom?: boolean;
+  // Telebridge — message keys to hide from the list because they were the
+  // "not for me" sibling of a Send Secured fan-out. The set lives in
+  // `global.bridge.filteredAsymmetricMessageIds`.
+  filteredAsymmetricMessageIds?: Record<string, true>;
 };
 
 enum Content {
@@ -245,6 +249,7 @@ const MessageList = ({
   translationLanguage,
   shouldAutoTranslate,
   isQuickPreview,
+  filteredAsymmetricMessageIds,
   onIntersectPinnedMessage,
   onScrollDownToggle,
   onNotchToggle,
@@ -345,6 +350,13 @@ const MessageList = ({
       if (machineText && isTelebridgeMachineMessage(machineText)) {
         return;
       }
+      // Telebridge: also hide the "not for me" sibling of every Send Secured
+      // fan-out — the sender publishes one envelope for the recipient and
+      // one encrypt-to-self for their other devices. The receive path flags
+      // envelopes that failed our X25519 GCM check into this set.
+      if (filteredAsymmetricMessageIds && filteredAsymmetricMessageIds[`msg${chatId}-${id}`]) {
+        return;
+      }
 
       const { shouldAppendJoinMessage, shouldAppendJoinMessageAfterCurrent } = (() => {
         if (!channelJoinInfo || type !== 'thread') return undefined;
@@ -407,7 +419,8 @@ const MessageList = ({
   }, [withUsers,
     messageIds, messagesById, type,
     isServiceNotificationsChat, isForum,
-    threadId, isChatWithSelf, channelJoinInfo]);
+    threadId, isChatWithSelf, channelJoinInfo,
+    filteredAsymmetricMessageIds, chatId]);
 
   useInterval(() => {
     if (!messageIds || !messagesById || type === 'scheduled' || isAccountFrozen || !isActive) return;
@@ -1028,6 +1041,7 @@ export default memo(withGlobal<OwnProps>(
       shouldAutoTranslate,
       canManageBotForumTopics: chat.isBotForum && user?.canManageBotForumTopics,
       shouldScrollToBottom,
+      filteredAsymmetricMessageIds: global.bridge.filteredAsymmetricMessageIds,
     };
   },
 )(MessageList));

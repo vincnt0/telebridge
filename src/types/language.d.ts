@@ -2113,6 +2113,7 @@ export interface LangPair {
   'BridgeScanMatchedArchived': undefined;
   'BridgeImportDuplicate': undefined;
   'BridgeImportInvalid': undefined;
+  'BridgeSendSecuredNoPeerKey': undefined;
   'BridgeContactsSectionTitle': undefined;
   'BridgeContactsEmpty': undefined;
   'BridgeContactKeyOriginTofu': undefined;

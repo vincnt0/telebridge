@@ -14,11 +14,11 @@ import {
   concatBytes,
   constantTimeEqual,
   decrypt,
-  encodeUtf8,
   fromBase64,
   secureWipe,
   verify,
 } from '../crypto';
+import { HKDF_INFO } from '../crypto/hkdfInfo';
 import { SIZES } from '../crypto/types';
 import type { EncryptedPayload } from '../crypto/types';
 import { deriveKey } from '../crypto/kdf';
@@ -27,9 +27,6 @@ import type { KeyExchangePayload } from '../protocol/types';
 import type { TelebridgeState } from '../state/TelebridgeState';
 
 import type { KeyExchangeResponse } from './types';
-
-/** HKDF info string — must be identical on initiator and responder */
-const HKDF_INFO = encodeUtf8('telebridge-v2-kx');
 
 /** Size of the key ID prefix in the wrapped payload */
 const KEY_ID_SIZE = 4;
@@ -137,7 +134,7 @@ export async function respondToKeyExchange(
   const sharedSecret = computeSharedSecret(myIdentity.x25519PrivateKey, payload.ephemeralX25519);
 
   // 7. Derive wrapping key via HKDF-SHA256 (identical info string as initiator)
-  const wrappingKey = deriveKey(sharedSecret, undefined, HKDF_INFO);
+  const wrappingKey = deriveKey(sharedSecret, undefined, HKDF_INFO.KX);
 
   // 8. Split and decrypt the wrapped payload (keyId + chatKey)
   const encryptedPayload = splitEncryptedChatKey(payload.encryptedChatKey);

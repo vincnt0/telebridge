@@ -3192,6 +3192,16 @@ export interface ActionPayloads {
   };
   bridgeClearMismatchPending: undefined;
   bridgeClearLastExport: undefined;
+  bridgeSendSecured: {
+    chatId: string;
+    text: string;
+  } & WithTabId;
+  bridgeMarkAsymmetricFiltered: {
+    messageKey: string;
+  };
+  bridgeMarkAsymmetricDecrypted: {
+    messageKey: string;
+  };
 }
 
 export interface RequiredActionPayloads {
