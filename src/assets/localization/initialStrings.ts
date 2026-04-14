@@ -14,7 +14,7 @@ export default {
   "LoginPhonePlaceholder": "Your phone number",
   "LoginNext": "Next",
   "LoginQRLogin": "Log in by QR Code",
-  "LoginQRTitle": "Log in to Telegram by QR Code",
+  "LoginQRTitle": "Log in to Telebridge by QR Code",
   "LoginQRHelp1": "Open Telegram on your phone",
   "LoginQRHelp2": "Go to **Settings** > **Devices** > **Link Desktop Device**",
   "LoginQRHelp3": "Point your phone at this screen to confirm login",

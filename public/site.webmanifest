@@ -1,7 +1,7 @@
 {
-    "name": "Telegram Web",
-    "short_name": "Telegram Web",
-    "description": "Telegram is a cloud-based mobile and desktop messaging app with a focus on security and speed.",
+    "name": "Telebridge Web",
+    "short_name": "Telebridge Web",
+    "description": "Telebridge is a Telegram client with an extra end-to-end encryption layer on top, giving you manually configurable key management and vaulted per-chat keys.",
     "start_url": "./",
     "gcm_sender_id": "122867383838",
     "icons": [
