@@ -2801,10 +2801,13 @@
 "NoForwardsRequestReject" = "Reject";
 "NoForwardsRequestAccept" = "Accept";
 "TelebridgeDecryptingRetry" = "Decrypting — try again in a moment.";
+"TelebridgeHandshakeNotCopyable" = "This is an encryption handshake — not copyable as text.";
 "TelebridgeForwardSkipped" = "Some encrypted messages couldn't be forwarded.";
 "BridgeChatEncrypted" = "Chat is end-to-end encrypted";
 "BridgeMessageEncrypted" = "End-to-end encrypted";
 "BridgeMessageDecryptFailed" = "Couldn't decrypt — unlock the bridge or check the key.";
+"BridgePreviewPrekey" = "Encryption setup";
+"BridgePreviewKeyExchange" = "Key exchange";
 "SettingsBridge" = "Bridge Encryption";
 "BridgeTitle" = "Bridge Encryption";
 "BridgeInfoDescription" = "End-to-end encrypt your messages with a per-chat key locked behind your bridge password. Only you and your chat partner can read them.";

@@ -2055,10 +2055,13 @@ export interface LangPair {
   'NoForwardsRequestReject': undefined;
   'NoForwardsRequestAccept': undefined;
   'TelebridgeDecryptingRetry': undefined;
+  'TelebridgeHandshakeNotCopyable': undefined;
   'TelebridgeForwardSkipped': undefined;
   'BridgeChatEncrypted': undefined;
   'BridgeMessageEncrypted': undefined;
   'BridgeMessageDecryptFailed': undefined;
+  'BridgePreviewPrekey': undefined;
+  'BridgePreviewKeyExchange': undefined;
   'SettingsBridge': undefined;
   'BridgeTitle': undefined;
   'BridgeInfoDescription': undefined;
