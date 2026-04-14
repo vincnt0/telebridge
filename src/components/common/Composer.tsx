@@ -322,6 +322,9 @@ type StateProps = {
   pollMaxAnswers?: number;
   replyToMessage?: ApiMessage;
   shouldOpenMessageMediaEditor?: TabState['shouldOpenMessageMediaEditor'];
+  // Telebridge Layer 4 — Send Secured preconditions.
+  canSendSecured?: boolean;
+  bridgeLastError?: string;
 };
 
 enum MainButtonState {
@@ -449,6 +452,8 @@ const Composer = ({
   pollMaxAnswers,
   replyToMessage,
   shouldOpenMessageMediaEditor,
+  canSendSecured,
+  bridgeLastError,
   onDropHide,
   onFocus,
   onBlur,
@@ -486,6 +491,8 @@ const Composer = ({
     updateDraftSuggestedPostInfo,
     updateShouldSaveAttachmentsCompression,
     applyDefaultAttachmentsCompression,
+    bridgeSendSecured,
+    bridgeClearError,
   } = getActions();
 
   const oldLang = useOldLang();
@@ -1969,6 +1976,31 @@ const Composer = ({
     handleActionWithPaymentConfirmation(sendSilent);
   });
 
+  // Telebridge Layer 4 — Send Secured. Fans out one X25519-encrypted
+  // envelope to the recipient and one encrypt-to-self copy. The underlying
+  // action validates preconditions again and sets `bridgeLastError` on
+  // failure; a useEffect below surfaces that as a toast.
+  const handleSendSecured = useLastCallback(() => {
+    if (!currentMessageList) return;
+    const { text } = parseHtmlAsFormattedText(getHtml());
+    if (!text) return;
+    bridgeSendSecured({ chatId, text });
+    clearDraft({ chatId, threadId, isLocalOnly: true });
+    requestMeasure(() => {
+      resetComposer();
+    });
+  });
+
+  useEffect(() => {
+    if (bridgeLastError !== 'BridgeSendSecuredNoPeerKey') return;
+    showNotification({
+      localId: 'bridgeSendSecuredNoPeerKey',
+      icon: 'lock',
+      message: lang('BridgeSendSecuredNoPeerKey'),
+    });
+    bridgeClearError();
+  }, [bridgeLastError, lang]);
+
   const handleSendWhenOnline = useLastCallback(() => {
     handleActionWithPaymentConfirmation(
       handleMessageSchedule, {}, SCHEDULED_WHEN_ONLINE, undefined, currentMessageList!, effect?.id,
@@ -2549,6 +2581,7 @@ const Composer = ({
           onSendSilent={!isChatWithSelf ? handleSendSilent : undefined}
           onSendSchedule={!isInScheduledList ? handleSendScheduled : undefined}
           onSendWhenOnline={handleSendWhenOnline}
+          onSendSecured={canSendSecured ? handleSendSecured : undefined}
           onRemoveEffect={handleRemoveEffect}
           onClose={handleContextMenuClose}
           onCloseAnimationEnd={handleContextMenuHide}
@@ -2673,6 +2706,21 @@ export default memo(withGlobal<OwnProps>(
 
     const webPagePreview = tabState.webPagePreviewId ? selectWebPage(global, tabState.webPagePreviewId) : undefined;
 
+    // Telebridge Layer 4 — Send Secured is DM-only, needs the bridge
+    // unlocked and the recipient's X25519 identity pinned. We expose the
+    // menu item only when all gates are satisfied; the backend action
+    // validates again on click as a belt-and-braces measure.
+    const canSendSecured = Boolean(
+      global.bridge.isUnlocked
+      && isChatWithUser
+      && !isChatWithBot
+      && !isChatWithSelf
+      && !isInScheduledList
+      && type !== 'story'
+      && chatId !== SERVICE_NOTIFICATIONS_USER_ID
+      && global.bridge.contactKeyIds[chatId],
+    );
+
     return {
       availableReactions: global.reactions.availableReactions,
       topReactions: type === 'story' ? global.reactions.topReactions : undefined,
@@ -2767,6 +2815,8 @@ export default memo(withGlobal<OwnProps>(
       pollMaxAnswers: appConfig.pollMaxAnswers,
       shouldOpenMessageMediaEditor,
       replyToMessage,
+      canSendSecured,
+      bridgeLastError: global.bridge.lastError,
     };
   },
 )(Composer));

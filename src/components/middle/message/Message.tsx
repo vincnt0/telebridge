@@ -345,6 +345,12 @@ type StateProps = {
    * helper can swap ciphertext for plaintext.
    */
   bridgeDecryptedText?: string;
+  /**
+   * Telebridge Layer 4 — true when this message was decrypted as an
+   * asymmetric `tb1.a` Send Secured envelope. Drives a distinct bubble
+   * class and a double-lock marker in MessageMeta.
+   */
+  isSecuredAsymmetric?: boolean;
 };
 
 type MetaPosition =
@@ -474,6 +480,7 @@ const Message = ({
   summary,
   canSendStickers,
   bridgeDecryptedText,
+  isSecuredAsymmetric,
   observeIntersectionForBottom,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
@@ -803,6 +810,7 @@ const Message = ({
     isJustAdded && 'is-just-added',
     (hasActiveReactions || shouldPlayEffect) && 'has-active-effect',
     isStoryMention && 'is-story-mention',
+    isSecuredAsymmetric && 'is-bridge-secured',
   );
 
   const text = textMessage && getMessageContent(textMessage).text;
@@ -1153,6 +1161,7 @@ const Message = ({
         effectEmoji={effect?.emoticon}
         isTelebridgeDecrypted={isTelebridgeDecrypted}
         isTelebridgeFailed={isTelebridgeFailed}
+        isSecuredAsymmetric={isSecuredAsymmetric}
         onClick={handleMetaClick}
         onEffectClick={handleEffectClick}
         onTranslationClick={handleTranslationClick}
@@ -2286,6 +2295,11 @@ export default memo(withGlobal<OwnProps>(
         && isTelebridgeMessage(message.content.text.text)
         ? global.bridge.decryptedByKey[getMessageKey(message)]
         : undefined,
+      // Telebridge Layer 4 — flag envelopes we successfully decrypted as
+      // `tb1.a` (Send Secured) so the bubble can render distinctly.
+      isSecuredAsymmetric: Boolean(
+        global.bridge.asymmetricDecryptedMessageIds[getMessageKey(message)],
+      ),
     };
   },
 )(Message));

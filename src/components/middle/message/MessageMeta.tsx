@@ -38,6 +38,7 @@ type OwnProps = {
   effectEmoji?: string;
   isTelebridgeDecrypted?: boolean;
   isTelebridgeFailed?: boolean;
+  isSecuredAsymmetric?: boolean;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   onTranslationClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   onEffectClick: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -60,6 +61,7 @@ const MessageMeta: FC<OwnProps> = ({
   effectEmoji,
   isTelebridgeDecrypted,
   isTelebridgeFailed,
+  isSecuredAsymmetric,
   onClick,
   onTranslationClick,
   onEffectClick,
@@ -196,8 +198,11 @@ const MessageMeta: FC<OwnProps> = ({
       )}
       {isTelebridgeDecrypted && (
         <Icon
-          name="lock"
-          className="message-bridge-lock"
+          name={isSecuredAsymmetric ? 'lock-badge' : 'lock'}
+          className={buildClassName(
+            'message-bridge-lock',
+            isSecuredAsymmetric && 'message-bridge-lock-secured',
+          )}
           ariaLabel={lang('BridgeMessageEncrypted')}
         />
       )}

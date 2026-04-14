@@ -2865,6 +2865,7 @@
 "BridgeImportDuplicate" = "Already imported.";
 "BridgeImportInvalid" = "Import signature is invalid.";
 "BridgeSendSecuredNoPeerKey" = "Can't send secured — no identity key pinned for this contact. Scan their QR or exchange prekeys first.";
+"BridgeSendSecuredMenuItem" = "Send Secured";
 "BridgeContactsSectionTitle" = "Contacts";
 "BridgeContactsEmpty" = "No contacts with keys yet. Keys appear here after a first encrypted chat or in-person QR scan.";
 "BridgeContactKeyOriginTofu" = "Trusted on first use";

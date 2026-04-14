@@ -35,6 +35,7 @@ export type OwnProps = {
   onSendSilent?: NoneToVoidFunction;
   onSendSchedule?: NoneToVoidFunction;
   onSendWhenOnline?: NoneToVoidFunction;
+  onSendSecured?: NoneToVoidFunction;
   onRemoveEffect?: NoneToVoidFunction;
   onClose: NoneToVoidFunction;
   onCloseAnimationEnd?: NoneToVoidFunction;
@@ -62,6 +63,7 @@ const CustomSendMenu: FC<OwnProps> = ({
   onSendSilent,
   onSendSchedule,
   onSendWhenOnline,
+  onSendSecured,
   onRemoveEffect,
   onClose,
   onCloseAnimationEnd,
@@ -157,6 +159,11 @@ const CustomSendMenu: FC<OwnProps> = ({
         dir={lang.isRtl ? 'rtl' : undefined}
       >
         {onSendSilent && <MenuItem icon="mute" onClick={onSendSilent}>{oldLang('SendWithoutSound')}</MenuItem>}
+        {onSendSecured && (
+          <MenuItem icon="lock" onClick={onSendSecured}>
+            {lang('BridgeSendSecuredMenuItem')}
+          </MenuItem>
+        )}
         {canSchedule && onSendSchedule && (
           <MenuItem icon="schedule" onClick={onSendSchedule}>
             {oldLang(isSavedMessages ? 'SetReminder' : 'ScheduleMessage')}

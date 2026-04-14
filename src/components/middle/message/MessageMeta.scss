@@ -81,6 +81,14 @@
     color: var(--color-error);
   }
 
+  // Telebridge Layer 4 — distinct marker for Send Secured (asymmetric)
+  // envelopes. Slight accent + full opacity differentiates it from the
+  // symmetric chat-key lock.
+  .message-bridge-lock-secured {
+    color: var(--color-primary);
+    opacity: 1;
+  }
+
   .message-imported,
   .message-signature {
     overflow: hidden;

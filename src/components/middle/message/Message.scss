@@ -49,6 +49,19 @@
     user-select: none;
   }
 
+  // Telebridge Layer 4 — Send Secured envelope successfully decrypted.
+  // Distinct left/right accent keeps the bubble shape intact while making
+  // the "asymmetric, per-message" nature obvious.
+  &.is-bridge-secured {
+    > .message-content-wrapper > .message-content {
+      box-shadow: inset 0 0 0 1px var(--color-primary);
+    }
+
+    &.own > .message-content-wrapper > .message-content {
+      box-shadow: inset 0 0 0 1px var(--accent-color);
+    }
+  }
+
   > .Avatar,
   > .message-content-wrapper {
     transform: scale(1) translateX(0);
