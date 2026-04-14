@@ -2159,6 +2159,8 @@ export interface LangPair {
   'BridgeHeaderMenuToggleOn': undefined;
   'BridgeHeaderMenuToggleOff': undefined;
   'BridgeHeaderMenuToggleUnavailable': undefined;
+  'BridgeHeaderMenuToggleLocked': undefined;
+  'BridgeHeaderMenuViewKeysLocked': undefined;
   'BridgeHeaderMenuViewKeys': undefined;
   'BridgeHeaderMenuOpenSettings': undefined;
   'BridgeSecuredModeEnabled': undefined;

@@ -2912,6 +2912,8 @@
 "BridgeHeaderMenuToggleOn" = "Encryption: On";
 "BridgeHeaderMenuToggleOff" = "Encryption: Off";
 "BridgeHeaderMenuToggleUnavailable" = "Encryption unavailable — no key pinned";
+"BridgeHeaderMenuToggleLocked" = "Encryption unavailable — unlock bridge first";
+"BridgeHeaderMenuViewKeysLocked" = "View keys (unlock first)";
 "BridgeHeaderMenuViewKeys" = "View keys";
 "BridgeHeaderMenuOpenSettings" = "Bridge settings";
 "BridgeSecuredModeEnabled" = "Encrypted mode on — messages will send secured.";

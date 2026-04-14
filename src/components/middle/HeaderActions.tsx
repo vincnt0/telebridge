@@ -337,7 +337,11 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
 
   const BridgeMenuButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {
     const ariaLabel = lang('BridgeHeaderMenuAriaLabel');
-    const iconName = securedModeOn ? 'lock' : 'unlock';
+    // Bridge locked → neutral key icon. Unlocked → lock/unlock reflects
+    // per-chat secured-mode toggle for instant visual state.
+    const iconName = !isBridgeUnlocked
+      ? 'key'
+      : securedModeOn ? 'lock' : 'unlock';
     return ({ onTrigger, isOpen }) => (
       <Button
         round
@@ -350,11 +354,17 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
         iconName={iconName}
       />
     );
-  }, [isRightColumnShown, lang, securedModeOn]);
+  }, [isRightColumnShown, lang, securedModeOn, isBridgeUnlocked]);
 
-  const bridgeToggleLabel = hasPinnedContactKey
-    ? (securedModeOn ? lang('BridgeHeaderMenuToggleOn') : lang('BridgeHeaderMenuToggleOff'))
-    : lang('BridgeHeaderMenuToggleUnavailable');
+  const bridgeToggleLabel = !isBridgeUnlocked
+    ? lang('BridgeHeaderMenuToggleLocked')
+    : hasPinnedContactKey
+      ? (securedModeOn ? lang('BridgeHeaderMenuToggleOn') : lang('BridgeHeaderMenuToggleOff'))
+      : lang('BridgeHeaderMenuToggleUnavailable');
+
+  const viewKeysLabel = isBridgeUnlocked
+    ? lang('BridgeHeaderMenuViewKeys')
+    : lang('BridgeHeaderMenuViewKeysLocked');
 
   return (
     <div className="HeaderActions">
@@ -453,14 +463,14 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
             >
               <MenuItem
                 icon={securedModeOn ? 'check' : 'placeholder'}
-                disabled={!hasPinnedContactKey}
+                disabled={!isBridgeUnlocked || !hasPinnedContactKey}
                 onClick={handleBridgeToggle}
               >
                 {bridgeToggleLabel}
               </MenuItem>
               <MenuSeparator />
-              <MenuItem icon="key" onClick={handleViewKeys}>
-                {lang('BridgeHeaderMenuViewKeys')}
+              <MenuItem icon="key" disabled={!isBridgeUnlocked} onClick={handleViewKeys}>
+                {viewKeysLabel}
               </MenuItem>
               <MenuItem icon="settings" onClick={handleOpenBridgeSettings}>
                 {lang('BridgeHeaderMenuOpenSettings')}
@@ -622,7 +632,10 @@ export default memo(withGlobal<OwnProps>(
     const isBridgeUnlocked = Boolean(global.bridge.isUnlocked);
     const hasPinnedContactKey = Boolean(global.bridge.contactKeyIds[chatId]);
     const securedModeOn = Boolean(global.bridge.securedModeByChatId[chatId]);
-    const canShowBridgeMenu = isBridgeUnlocked && isPrivate && !isChatWithSelf && !bot && isMainThread;
+    // Visible in any DM on the main thread (not self/bot/group/channel),
+    // regardless of bridge lock state. When locked the dropdown degrades —
+    // toggle + View keys disabled, Bridge settings always reachable.
+    const canShowBridgeMenu = isPrivate && !isChatWithSelf && !bot && isMainThread;
 
     return {
       noMenu: false,
