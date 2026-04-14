@@ -2828,3 +2828,7 @@
 "BridgePasswordMismatch" = "Passwords don't match.";
 "BridgePasswordTooShort" = "Password must be at least 8 characters.";
 "BridgeWrongPassword" = "Incorrect password.";
+"BridgeWaitingForContactPrekey" = "Waiting for your contact's encryption key. They need to enable Bridge encryption too.";
+"BridgeStartEncryptedChatButton" = "Start Encrypted Chat";
+"BridgeStartEncryptedChatDescription" = "Enable end-to-end encrypted messaging with this contact.";
+"BridgeWaitingButton" = "Waiting for contact…";

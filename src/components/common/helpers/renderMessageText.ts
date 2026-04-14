@@ -20,6 +20,8 @@ import trimText from '../../../util/trimText';
 import {
   canDecryptNow,
   ensureDecryptedText,
+  ensureKxProcessed,
+  ensurePrekeyProcessed,
   getCachedDecryptedText,
 } from '../../../telebridge/receive';
 import renderText from './renderText';
@@ -63,6 +65,14 @@ export function renderMessageText({
   // key, swap in cached plaintext (or kick off a background decrypt and show
   // ciphertext until the result lands). Entities are dropped alongside —
   // their offsets refer to plaintext the ciphertext no longer has.
+  // Telebridge machine-msg dispatch: pk (contact prekey) first so any kx in
+  // the same render pass can resolve against a fresh contact key; kx next.
+  // Sponsored messages never carry these wire formats.
+  if ('id' in message) {
+    ensurePrekeyProcessed(message);
+    ensureKxProcessed(message);
+  }
+
   let text = rawText;
   let entities = rawEntities;
   if (canDecryptNow(message.chatId, rawText)) {

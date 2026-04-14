@@ -350,6 +350,10 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     isUnlocked: false,
     chatKeyIds: {},
     decryptedByKey: {},
+    prekeyPublishedChatIds: {},
+    contactKeyIds: {},
+    kxInProgressChatIds: {},
+    contactTofuStatusByContactId: {},
   },
 };
 

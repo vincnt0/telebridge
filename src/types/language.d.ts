@@ -2080,6 +2080,10 @@ export interface LangPair {
   'BridgePasswordMismatch': undefined;
   'BridgePasswordTooShort': undefined;
   'BridgeWrongPassword': undefined;
+  'BridgeWaitingForContactPrekey': undefined;
+  'BridgeStartEncryptedChatButton': undefined;
+  'BridgeStartEncryptedChatDescription': undefined;
+  'BridgeWaitingButton': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {

@@ -80,6 +80,7 @@ import useWindowSize from '../../hooks/window/useWindowSize';
 import usePinnedMessage from './hooks/usePinnedMessage';
 import useFluidBackgroundFilter from './message/hooks/useFluidBackgroundFilter';
 
+import StartEncryptedChatBanner from '../bridge/StartEncryptedChatBanner';
 import Composer from '../common/Composer';
 import PrivacySettingsNoticeModal from '../common/PrivacySettingsNoticeModal.async';
 import SeenByModal from '../common/SeenByModal.async';
@@ -552,6 +553,9 @@ function MiddleColumn({
               getLoadingPinnedId={getLoadingPinnedId}
               onFocusPinnedMessage={handleFocusPinnedMessage}
             />
+            {renderingChatId && (
+              <StartEncryptedChatBanner chatId={renderingChatId} />
+            )}
             <Transition
               name={resolveTransitionName(
                 'slide',

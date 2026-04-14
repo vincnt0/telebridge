@@ -14,7 +14,7 @@ import {
 } from '../../../global/helpers';
 import { isApiPeerUser } from '../../../global/helpers/peers';
 import { selectPeer } from '../../../global/selectors';
-import { isTelebridgeMessage } from '../../../telebridge/protocol';
+import { isTelebridgeMachineMessage, isTelebridgeMessage } from '../../../telebridge/protocol';
 import buildClassName from '../../../util/buildClassName';
 import { formatPastTimeShort } from '../../../util/dates/oldDateFormat';
 import { getMessageKey } from '../../../util/keys/messageKey';
@@ -74,6 +74,13 @@ const ChatMessage = ({
   const buttonRef = useSelectWithEnter(handleClick);
 
   if (!peer) {
+    return undefined;
+  }
+
+  // Telebridge: machine messages (kx/pk handshake wire payloads) are not
+  // user-facing content; treat them as non-matches in search results.
+  const rawText = message.content.text?.text;
+  if (rawText && isTelebridgeMachineMessage(rawText)) {
     return undefined;
   }
 

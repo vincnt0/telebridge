@@ -35,6 +35,11 @@ import { getTelebridgeVault } from './send';
 /** Keys currently in-flight so we don't stack duplicate decrypts per render. */
 const inflight = new Set<string>();
 
+/** Message keys whose `tb1.pk.…` wire payload has already been dispatched. */
+const prekeyProcessed = new Set<string>(); // messageKey
+/** Message keys whose `tb1.kx.…` wire payload has already been dispatched. */
+const kxProcessed = new Set<string>();     // messageKey
+
 /**
  * Synchronous probe for the render path. Returns the plaintext if the
  * background decrypt has already resolved, otherwise undefined.
@@ -68,6 +73,10 @@ export function ensureDecryptedText(
   messageKey: string,
   encryptedText: string,
 ): void {
+  // Machine-msg wire formats (prekey publish, key exchange) are handled by
+  // their own dispatchers — they're not `tb1.s` ciphertext and would only
+  // fail the symmetric decrypt path.
+  if (encryptedText.startsWith('tb1.pk.') || encryptedText.startsWith('tb1.kx.')) return;
   if (inflight.has(messageKey)) return;
   if (getCachedDecryptedText(messageKey) !== undefined) return;
   if (!canDecryptNow(chatId, encryptedText)) return;
@@ -128,9 +137,65 @@ export function backfillDecryptsForAllChats(): void {
     for (const message of Object.values(chatMessages.byId)) {
       const text = message.content.text?.text;
       if (!text || !isTelebridgeMessage(text)) continue;
+      // Prekey first so contact keys land before any kx in the same pass can
+      // consume them; kx next so chat keys exist before decrypt attempts.
+      ensurePrekeyProcessed(message);
+      ensureKxProcessed(message);
       ensureDecryptedText(chatId, getMessageKey(message), text);
     }
   }
+}
+
+/**
+ * Fire-and-forget dispatcher for inbound `tb1.pk.…` contact-prekey publishes.
+ * Safe to call on every render — deduped by `prekeyProcessed` keyed on
+ * messageKey. Own outgoing messages are ignored. If the vault is locked we
+ * bail without marking the key processed so the backfill on unlock can retry.
+ */
+export function ensurePrekeyProcessed(message: ApiMessage): void {
+  const text = message.content.text?.text;
+  if (!text || !text.startsWith('tb1.pk.')) return;
+  if (!message.senderId) return;
+
+  const global = getGlobal();
+  if (message.senderId === global.currentUserId) return;
+
+  const messageKey = getMessageKey(message);
+  if (prekeyProcessed.has(messageKey)) return;
+
+  if (getTelebridgeVault().isLocked()) return;
+
+  prekeyProcessed.add(messageKey);
+  getActions().bridgeStoreContactPrekey({ senderId: message.senderId, wireText: text });
+}
+
+/**
+ * Fire-and-forget dispatcher for inbound `tb1.kx.…` key-exchange messages.
+ * Safe to call on every render — deduped by `kxProcessed` keyed on
+ * messageKey. Own outgoing messages are ignored. Skips silently when a chat
+ * key already exists, so old kx traffic in history isn't re-played. Locked
+ * vault leaves the message unmarked so the unlock backfill can retry.
+ */
+export function ensureKxProcessed(message: ApiMessage): void {
+  const text = message.content.text?.text;
+  if (!text || !text.startsWith('tb1.kx.')) return;
+  if (!message.senderId) return;
+
+  const global = getGlobal();
+  if (message.senderId === global.currentUserId) return;
+  if (global.bridge.chatKeyIds[message.chatId]) return;
+
+  const messageKey = getMessageKey(message);
+  if (kxProcessed.has(messageKey)) return;
+
+  if (getTelebridgeVault().isLocked()) return;
+
+  kxProcessed.add(messageKey);
+  getActions().bridgeReceiveChatKey({
+    chatId: message.chatId,
+    senderId: message.senderId,
+    wireText: text,
+  });
 }
 
 // ---------------------------------------------------------------------------

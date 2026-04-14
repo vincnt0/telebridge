@@ -3141,6 +3141,21 @@ export interface ActionPayloads {
     key: Uint8Array;
     keyId?: string;
   };
+  bridgePublishPrekey: {
+    chatId: string;
+  };
+  bridgeStoreContactPrekey: {
+    senderId: string;
+    wireText: string;
+  };
+  bridgeStartKeyExchange: {
+    chatId: string;
+  };
+  bridgeReceiveChatKey: {
+    chatId: string;
+    senderId: string;
+    wireText: string;
+  };
   bridgeClearError: undefined;
 }
 

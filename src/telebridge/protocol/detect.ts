@@ -22,6 +22,17 @@ export function isTelebridgeMessage(text: string): boolean {
 }
 
 /**
+ * Check whether a message is a Telebridge machine message.
+ *
+ * Machine messages (kx = key exchange, pk = prekey publication) carry
+ * handshake bytes and should never be shown in the user-facing chat log,
+ * chat-list previews, or search results.
+ */
+export function isTelebridgeMachineMessage(text: string): boolean {
+  return text.startsWith('tb1.kx.') || text.startsWith('tb1.pk.');
+}
+
+/**
  * Parse the protocol header from a wire-format string.
  * Extracts version number and mode identifier.
  *

@@ -17,10 +17,17 @@
 
 import type { ActionReturnType, GlobalState } from '../../types';
 
+import { concatBytes, ed25519Sign } from '../../../telebridge/crypto';
+import { initiateKeyExchange, respondToKeyExchange } from '../../../telebridge/keyExchange';
+import { decodePrekeyPublication } from '../../../telebridge/protocol/decode';
+import { encodePrekeyPublication } from '../../../telebridge/protocol/encode';
 import { backfillDecryptsForAllChats } from '../../../telebridge/receive';
 import { getTelebridgeVault } from '../../../telebridge/send';
+import { isUserId } from '../../../util/entities/ids';
+import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { pause, rafPromise } from '../../../util/schedulers';
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
+import { addActionHandler, getActions, getGlobal, setGlobal } from '../../index';
+import { selectChat } from '../../selectors';
 
 addActionHandler('bridgeSetDecryptedText', (global, actions, payload): ActionReturnType => {
   const { messageKey, text } = payload;
@@ -211,8 +218,232 @@ addActionHandler('bridgeStoreChatKey', async (global, actions, payload): Promise
 });
 
 // ---------------------------------------------------------------------------
+// Layer-2 key exchange (prekey publication + handshake)
+// ---------------------------------------------------------------------------
+
+addActionHandler('bridgePublishPrekey', async (global, actions, payload): Promise<void> => {
+  const { chatId } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    if (!isUserId(chatId)) {
+      throw new Error('Prekey publication only supported for 1:1 chats');
+    }
+    if (global.bridge.prekeyPublishedChatIds[chatId]) {
+      return;
+    }
+
+    const chat = selectChat(global, chatId);
+    if (!chat) {
+      throw new Error(`Chat ${chatId} not found`);
+    }
+
+    const wireText = await buildPrekeyWireMessage();
+
+    getActions().sendMessage({ chat, text: wireText, tabId: getCurrentTabId() });
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        prekeyPublishedChatIds: {
+          ...global.bridge.prekeyPublishedChatIds,
+          [chatId]: true,
+        },
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeStoreContactPrekey', async (global, actions, payload): Promise<void> => {
+  const { senderId, wireText } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+
+    const decoded = decodePrekeyPublication(wireText);
+    const result = vault.storeContactKey(senderId, decoded.ed25519PublicKey, decoded.x25519PublicKey);
+    const persistedJson = vault.toPersistable();
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        contactKeyIds: {
+          ...global.bridge.contactKeyIds,
+          [senderId]: true,
+        },
+        contactTofuStatusByContactId: {
+          ...global.bridge.contactTofuStatusByContactId,
+          [senderId]: result.status,
+        },
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeStartKeyExchange', async (global, actions, payload): Promise<void> => {
+  const { chatId } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+    if (!isUserId(chatId)) {
+      throw new Error('Key exchange only supported for 1:1 chats');
+    }
+
+    // 1:1 chats: peer user ID === chat ID
+    const peerId = chatId;
+
+    const chat = selectChat(global, chatId);
+    if (!chat) {
+      throw new Error(`Chat ${chatId} not found`);
+    }
+
+    // Step b — make sure our prekey is out there.
+    if (!global.bridge.prekeyPublishedChatIds[chatId]) {
+      const wireText = await buildPrekeyWireMessage();
+      getActions().sendMessage({ chat, text: wireText, tabId: getCurrentTabId() });
+
+      global = getGlobal();
+      global = {
+        ...global,
+        bridge: {
+          ...global.bridge,
+          prekeyPublishedChatIds: {
+            ...global.bridge.prekeyPublishedChatIds,
+            [chatId]: true,
+          },
+        },
+      };
+      setGlobal(global);
+    }
+
+    // Step c — do we have the contact's prekey?
+    const contact = vault.getContactKey(peerId);
+    if (!contact) {
+      global = getGlobal();
+      setGlobal({
+        ...global,
+        bridge: {
+          ...global.bridge,
+          lastError: 'BridgeWaitingForContactPrekey',
+          kxInProgressChatIds: {
+            ...global.bridge.kxInProgressChatIds,
+            [chatId]: true,
+          },
+        },
+      });
+      return;
+    }
+
+    // Step d — initiate handshake.
+    const myIdentity = vault.getIdentityKeyPair();
+    const contactX25519 = vault.getContactX25519PublicKey(peerId);
+    if (!contactX25519) {
+      throw new Error('Contact X25519 key not available');
+    }
+
+    const initiation = await initiateKeyExchange(myIdentity, contactX25519);
+
+    getActions().sendMessage({ chat, text: initiation.wireMessage, tabId: getCurrentTabId() });
+
+    const persistedJson = await vault.storeChatKey(chatId, initiation.chatKey, initiation.keyId);
+
+    global = getGlobal();
+    const nextKxInProgress = { ...global.bridge.kxInProgressChatIds };
+    delete nextKxInProgress[chatId];
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        chatKeyIds: {
+          ...global.bridge.chatKeyIds,
+          [chatId]: true,
+        },
+        kxInProgressChatIds: nextKxInProgress,
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeReceiveChatKey', async (global, actions, payload): Promise<void> => {
+  const { chatId, senderId, wireText } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+
+    const myIdentity = vault.getIdentityKeyPair();
+    const result = await respondToKeyExchange(wireText, myIdentity, vault, senderId);
+
+    const persistedJson = await vault.storeChatKey(chatId, result.chatKey, result.keyId);
+
+    global = getGlobal();
+    const nextKxInProgress = { ...global.bridge.kxInProgressChatIds };
+    delete nextKxInProgress[chatId];
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        chatKeyIds: {
+          ...global.bridge.chatKeyIds,
+          [chatId]: true,
+        },
+        kxInProgressChatIds: nextKxInProgress,
+        contactTofuStatusByContactId: {
+          ...global.bridge.contactTofuStatusByContactId,
+          [senderId]: result.tofuStatus,
+        },
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Build a signed `tb1.pk` wire message advertising our identity public keys.
+ * Caller must ensure the vault is unlocked.
+ */
+async function buildPrekeyWireMessage(): Promise<string> {
+  const vault = getTelebridgeVault();
+  const identity = vault.getIdentityKeyPair();
+
+  const signable = concatBytes(identity.ed25519PublicKey, identity.x25519PublicKey);
+  const signature = ed25519Sign(signable, identity.ed25519PrivateKey);
+
+  return encodePrekeyPublication({
+    ed25519PublicKey: identity.ed25519PublicKey,
+    x25519PublicKey: identity.x25519PublicKey,
+    signature,
+  });
+}
 
 function setBusy(global: GlobalState, isBusy: boolean): GlobalState {
   return {

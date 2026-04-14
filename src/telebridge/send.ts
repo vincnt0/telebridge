@@ -148,6 +148,12 @@ export async function encryptSendFields(
   text: string | undefined,
   caption: string | undefined,
 ): Promise<{ text: string | undefined; caption: string | undefined }> {
+  // Bridge control messages (`tb1.pk`, `tb1.kx`) are already wire-format —
+  // never re-wrap them under a symmetric chat key.
+  if (text?.startsWith('tb1.')) {
+    return { text, caption };
+  }
+
   if (!shouldEncryptChat(chatId)) {
     return { text, caption };
   }

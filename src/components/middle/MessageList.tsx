@@ -69,6 +69,7 @@ import { REM } from '../common/helpers/mediaDimensions';
 import { groupMessages } from './helpers/groupMessages';
 import { requestMessageListReflow } from './helpers/messageListReflow';
 import { preventMessageInputBlur } from './helpers/preventMessageInputBlur';
+import { isTelebridgeMachineMessage } from '../../telebridge/protocol';
 
 import useInterval from '../../hooks/schedulers/useInterval';
 import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
@@ -335,6 +336,13 @@ const MessageList = ({
 
       const message = messagesById[id];
       if (!message) {
+        return;
+      }
+
+      // Telebridge: hide machine messages (kx/pk handshake wire payloads) from
+      // the rendered log entirely — no bubble, no placeholder.
+      const machineText = message.content.text?.text;
+      if (machineText && isTelebridgeMachineMessage(machineText)) {
         return;
       }
 

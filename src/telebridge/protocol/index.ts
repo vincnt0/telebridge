@@ -23,6 +23,7 @@ export type {
 // Detection & parsing
 export {
   getPayloadBase64,
+  isTelebridgeMachineMessage,
   isTelebridgeMessage,
   parseHeader,
 } from './detect';

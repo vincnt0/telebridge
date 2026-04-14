@@ -20,7 +20,7 @@ import {
   TRUNCATED_SUMMARY_LENGTH,
 } from '../../global/helpers/messageSummary';
 import { selectPeerStory, selectPollFromMessage, selectWebPageFromMessage } from '../../global/selectors';
-import { isTelebridgeMessage } from '../../telebridge/protocol';
+import { isTelebridgeMachineMessage, isTelebridgeMessage } from '../../telebridge/protocol';
 import { getMessageKey } from '../../util/keys/messageKey';
 import trimText from '../../util/trimText';
 import renderText from './helpers/renderText';
@@ -66,6 +66,15 @@ function MessageSummary({
   observeIntersectionForPlaying,
 }: OwnProps & StateProps) {
   const lang = useLang();
+
+  // Telebridge: machine messages (kx/pk handshake wire payloads) must never
+  // surface in previews. Render an empty span — same fallback used for
+  // messages with no text content.
+  const rawText = message.content.text?.text;
+  if (rawText && isTelebridgeMachineMessage(rawText)) {
+    return <span />;
+  }
+
   const extractedText = extractMessageText(message, inChatList);
   const hasPoll = Boolean(getMessagePollId(message));
   const isAction = isActionMessage(message);

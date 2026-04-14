@@ -11,8 +11,11 @@ import { getMessageKey } from '../../util/keys/messageKey';
 import {
   canDecryptNow,
   ensureDecryptedText,
+  ensureKxProcessed,
+  ensurePrekeyProcessed,
   getCachedDecryptedText,
 } from '../../telebridge/receive';
+import { isTelebridgeMachineMessage } from '../../telebridge/protocol';
 import { renderTextWithEntities } from '../../components/common/helpers/renderTextWithEntities';
 import {
   getMessageTextWithFallback, getMessageTranscription,
@@ -46,6 +49,17 @@ export function getMessageTextWithSpoilers(
 
   const rawText = getMessageTextWithFallback(lang, statefulContent?.story || message)?.text;
   if (!rawText) {
+    return transcription;
+  }
+
+  // Telebridge machine-msg dispatch: pk/kx wire payloads surface through
+  // chat-list previews too, so hook them here alongside the decrypt kick-off.
+  ensurePrekeyProcessed(message);
+  ensureKxProcessed(message);
+
+  // Telebridge: hide machine messages (kx/pk handshake wire payloads) from any
+  // preview consumer — fall back to transcription or empty, same as "no text".
+  if (isTelebridgeMachineMessage(rawText)) {
     return transcription;
   }
 
