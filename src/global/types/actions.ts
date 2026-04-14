@@ -3159,6 +3159,10 @@ export interface ActionPayloads {
   bridgeRemoveChatKey: {
     chatId: string;
   };
+  bridgeSetManualChatKey: {
+    chatId: string;
+    keyText: string;
+  } & WithTabId;
   bridgeVerifyContact: {
     contactId: string;
   };

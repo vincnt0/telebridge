@@ -55,14 +55,16 @@ const ProfileKeysTab = ({
   lastError,
   contactKeyIds,
 }: OwnProps & StateProps) => {
-  const { bridgeImportContactKey, bridgeApplyInPersonScan } = getActions();
+  const { bridgeImportContactKey, bridgeApplyInPersonScan, bridgeSetManualChatKey } = getActions();
 
   const lang = useLang();
 
   const [isImportOpen, openImport, closeImport] = useFlag(false);
   const [isScanOpen, openScan, closeScan] = useFlag(false);
   const [isMyQrOpen, openMyQr, closeMyQr] = useFlag(false);
+  const [isManualKeyOpen, openManualKeyModal, closeManualKeyModal] = useFlag(false);
   const [importText, setImportText] = useState('');
+  const [manualKeyText, setManualKeyText] = useState('');
 
   // Mirror SettingsBridgeContacts: bump a token after every mutating action so
   // the embedded history row re-pulls from the vault. Folding all the bridge
@@ -104,6 +106,14 @@ const ProfileKeysTab = ({
     closeScan();
   });
 
+  const handleManualKeySubmit = useLastCallback(() => {
+    const trimmed = manualKeyText.trim();
+    if (!trimmed) return;
+    bridgeSetManualChatKey({ chatId, keyText: trimmed });
+    setManualKeyText('');
+    closeManualKeyModal();
+  });
+
   return (
     <div className={styles.root}>
       <KeysTabStatusSection
@@ -134,7 +144,38 @@ const ProfileKeysTab = ({
         />
       )}
 
-      {isDebugMode && <div className={styles.devToolsPlaceholder} />}
+      {isDebugMode && (
+        <section className={styles.devToolsSection}>
+          <h4 className={styles.sectionTitle}>{lang('BridgeKeysTabDevToolsSection')}</h4>
+          <p className={styles.devToolsHint}>{lang('BridgeKeysTabDevToolsHint')}</p>
+          <Button size="smaller" color="danger" onClick={openManualKeyModal}>
+            {lang('BridgeKeysTabDevToolsSetKeyButton')}
+          </Button>
+        </section>
+      )}
+
+      <Modal
+        isOpen={isManualKeyOpen}
+        onClose={closeManualKeyModal}
+        title={lang('BridgeKeysTabDevToolsDialogTitle')}
+        hasCloseButton
+      >
+        <p className={styles.devToolsDialogText}>{lang('BridgeKeysTabDevToolsDialogText')}</p>
+        <textarea
+          className={styles.importTextarea}
+          value={manualKeyText}
+          placeholder={lang('BridgeKeysTabDevToolsPlaceholder')}
+          onChange={(e) => setManualKeyText(e.currentTarget.value)}
+        />
+        <div className={styles.dialogActions}>
+          <Button color="translucent" onClick={closeManualKeyModal}>
+            {lang('Cancel')}
+          </Button>
+          <Button color="danger" onClick={handleManualKeySubmit} disabled={!manualKeyText.trim()}>
+            {lang('BridgeKeysTabDevToolsSubmit')}
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isImportOpen}

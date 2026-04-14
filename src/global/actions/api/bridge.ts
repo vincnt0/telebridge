@@ -23,6 +23,7 @@ import {
   encodeUtf8,
   encryptForRecipient,
   fromBase64,
+  fromHex,
 } from '../../../telebridge/crypto';
 import {
   decodeIdentityBundle,
@@ -571,6 +572,86 @@ addActionHandler('bridgeRemoveChatKey', async (global, actions, payload): Promis
   }
 });
 
+/**
+ * Debug-only: install a manually-entered 32-byte key as the active chat key
+ * for `chatId`. Gated on `global.bridge.isDebugMode`. Exists to sidestep
+ * Layer-2 KX when testing two-account scenarios on a single device (pin the
+ * same symmetric key on both accounts so `tb1.s` round-trips without a real
+ * handshake). Refuses to overwrite an existing chat key — the user must
+ * remove the KX-derived key first. Stamps `derivedFromKeyId = '__manual__'`
+ * so downstream code can tell manual keys apart from KX-derived ones.
+ */
+addActionHandler('bridgeSetManualChatKey', async (global, actions, payload): Promise<void> => {
+  const { chatId, keyText, tabId = getCurrentTabId() } = payload;
+
+  if (!global.bridge.isDebugMode) {
+    setGlobal({
+      ...global,
+      bridge: { ...global.bridge, lastError: 'BridgeKeysTabDevToolsErrorUnavailable' },
+    });
+    return;
+  }
+
+  if (!global.bridge.isUnlocked) {
+    setGlobal({
+      ...global,
+      bridge: { ...global.bridge, lastError: 'BridgeKeysTabDevToolsErrorUnavailable' },
+    });
+    return;
+  }
+
+  if (!global.bridge.contactKeyIds[chatId]) {
+    setGlobal({
+      ...global,
+      bridge: { ...global.bridge, lastError: 'BridgeKeysTabDevToolsErrorUnavailable' },
+    });
+    return;
+  }
+
+  if (global.bridge.chatKeyIds[chatId]) {
+    setGlobal({
+      ...global,
+      bridge: { ...global.bridge, lastError: 'BridgeKeysTabDevToolsErrorExists' },
+    });
+    return;
+  }
+
+  // Parse the textual key. Hex first (64 chars, strict regex), base64 second
+  // (decode + length === 32). Anything else is rejected — no URL-safe base64,
+  // no whitespace tolerance, no heuristics. Keeps parsing boring.
+  const keyBytes = parseManualChatKey(keyText);
+  if (!keyBytes) {
+    setGlobal({
+      ...global,
+      bridge: { ...global.bridge, lastError: 'BridgeKeysTabDevToolsErrorInvalid' },
+    });
+    return;
+  }
+
+  try {
+    const vault = getTelebridgeVault();
+    const persistedJson = await vault.storeChatKey(chatId, keyBytes, undefined, '__manual__');
+
+    global = getGlobal();
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        chatKeyIds: {
+          ...global.bridge.chatKeyIds,
+          [chatId]: true,
+        },
+        lastError: undefined,
+      },
+    });
+
+    actions.showNotification({ message: { key: 'BridgeKeysTabDevToolsKeySet' }, tabId });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
 addActionHandler('bridgeVerifyContact', (global, actions, payload): ActionReturnType => {
   const { contactId } = payload;
 
@@ -1046,6 +1127,31 @@ async function buildPrekeyWireMessage(): Promise<string> {
     x25519PublicKey: identity.x25519PublicKey,
     signature,
   });
+}
+
+/**
+ * Parse a debug-only manual chat key. Accepts strict 64-char hex first, then
+ * standard base64 (no URL-safe variant, no whitespace tolerance). Returns the
+ * decoded bytes iff they decode to exactly 32 bytes; otherwise `undefined`.
+ */
+function parseManualChatKey(keyText: string): Uint8Array | undefined {
+  if (/^[0-9a-fA-F]{64}$/.test(keyText)) {
+    try {
+      const bytes = fromHex(keyText);
+      if (bytes.length === 32) return bytes;
+    } catch {
+      // Fall through to base64
+    }
+  }
+
+  try {
+    const bytes = fromBase64(keyText);
+    if (bytes.length === 32) return bytes;
+  } catch {
+    // Invalid base64 — fall through
+  }
+
+  return undefined;
 }
 
 function setBusy(global: GlobalState, isBusy: boolean): GlobalState {

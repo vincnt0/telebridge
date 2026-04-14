@@ -463,9 +463,18 @@ export class TelebridgeState {
    * @param chatId - Telegram chat ID
    * @param key - 32-byte AES-256 key
    * @param keyId - 4-byte key identifier (hex string)
+   * @param derivedFromKeyIdOverride - Optional override for the
+   *   `derivedFromKeyId` stamp. Used by the debug-only manual chat-key path to
+   *   record `'__manual__'`. When omitted, falls back to the contact's active
+   *   key id (or empty string for orphans — §3.5).
    * @returns Updated serialized persisted state
    */
-  async storeChatKey(chatId: string, key: Uint8Array, keyId?: string): Promise<string> {
+  async storeChatKey(
+    chatId: string,
+    key: Uint8Array,
+    keyId?: string,
+    derivedFromKeyIdOverride?: string,
+  ): Promise<string> {
     this.assertUnlocked();
 
     const resolvedKeyId = keyId ?? toHexId(randomBytes(4));
@@ -477,8 +486,11 @@ export class TelebridgeState {
     // Stamp the chat-key entry with the contact's active keyId at negotiation
     // time. 1:1 chats use chatId === peer user id; group chats and chats
     // without a contact record get an empty string (orphan — §3.5).
+    // The override path lets the debug-only manual path stamp a sentinel.
     const contact = this.persisted.contacts[chatId];
-    const derivedFromKeyId = contact ? contact.activeKeyId : '';
+    const derivedFromKeyId = derivedFromKeyIdOverride !== undefined
+      ? derivedFromKeyIdOverride
+      : (contact ? contact.activeKeyId : '');
 
     // Store in persisted state
     this.persisted.chatKeys[chatId] = {

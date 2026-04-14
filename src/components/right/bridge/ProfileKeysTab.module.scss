@@ -99,6 +99,30 @@
   margin-top: 0.5rem;
 }
 
+.devToolsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-left: 0.1875rem solid var(--color-warning, var(--color-primary));
+  border-radius: 0.25rem;
+  background-color: var(--color-background-secondary);
+}
+
+.devToolsHint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+.devToolsDialogText {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
 .importTextarea {
   width: 100%;
   min-height: 8rem;
