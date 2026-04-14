@@ -423,6 +423,61 @@ addActionHandler('bridgeReceiveChatKey', async (global, actions, payload): Promi
   }
 });
 
+addActionHandler('bridgeRemoveChatKey', async (global, actions, payload): Promise<void> => {
+  const { chatId } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+
+    const persistedJson = await vault.removeChatKey(chatId);
+
+    global = getGlobal();
+    const nextChatKeyIds = { ...global.bridge.chatKeyIds };
+    delete nextChatKeyIds[chatId];
+    setGlobal({
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        chatKeyIds: nextChatKeyIds,
+      },
+    });
+  } catch (err) {
+    setGlobal(setError(getGlobal(), err));
+  }
+});
+
+addActionHandler('bridgeVerifyContact', (global, actions, payload): ActionReturnType => {
+  const { contactId } = payload;
+
+  try {
+    const vault = getTelebridgeVault();
+    if (!vault.isInitialized() || vault.isLocked()) {
+      throw new Error('Bridge is locked');
+    }
+
+    vault.verifyContact(contactId);
+    const persistedJson = vault.toPersistable();
+
+    return {
+      ...global,
+      bridge: {
+        ...global.bridge,
+        persistedJson,
+        contactTofuStatusByContactId: {
+          ...global.bridge.contactTofuStatusByContactId,
+          [contactId]: 'verified',
+        },
+      },
+    };
+  } catch (err) {
+    return setError(global, err);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

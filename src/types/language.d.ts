@@ -2084,6 +2084,27 @@ export interface LangPair {
   'BridgeStartEncryptedChatButton': undefined;
   'BridgeStartEncryptedChatDescription': undefined;
   'BridgeWaitingButton': undefined;
+  'BridgeChangePasswordDialogTitle': undefined;
+  'BridgeChangePasswordDialogText': undefined;
+  'BridgeCurrentPasswordLabel': undefined;
+  'BridgeNewPasswordLabel': undefined;
+  'BridgeNewPasswordConfirmLabel': undefined;
+  'BridgeSubmitChangePassword': undefined;
+  'BridgeSamePassword': undefined;
+  'BridgeRemoveKeyTitle': undefined;
+  'BridgeRemoveKeyText': undefined;
+  'BridgeRemoveKeyConfirm': undefined;
+  'BridgeEncryptedChatMenuTitle': undefined;
+  'BridgeVerifyContactMenuItem': undefined;
+  'BridgeRemoveKeyMenuItem': undefined;
+  'BridgeVerifyContactTitle': undefined;
+  'BridgeVerifyContactText': undefined;
+  'BridgeSafetyNumberLabel': undefined;
+  'BridgeMarkVerifiedButton': undefined;
+  'BridgeVerifiedBadge': undefined;
+  'BridgeUnverifiedBadge': undefined;
+  'BridgeKeyChangedBadge': undefined;
+  'BridgeNoContactKey': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {

@@ -3156,6 +3156,12 @@ export interface ActionPayloads {
     senderId: string;
     wireText: string;
   };
+  bridgeRemoveChatKey: {
+    chatId: string;
+  };
+  bridgeVerifyContact: {
+    contactId: string;
+  };
   bridgeClearError: undefined;
 }
 

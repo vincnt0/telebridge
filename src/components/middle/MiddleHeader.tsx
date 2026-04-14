@@ -40,6 +40,7 @@ import { isUserId } from '../../util/entities/ids';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useConnectionStatus from '../../hooks/useConnectionStatus';
+import useFlag from '../../hooks/useFlag';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLongPress from '../../hooks/useLongPress';
@@ -47,6 +48,7 @@ import useOldLang from '../../hooks/useOldLang';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import useWindowSize from '../../hooks/window/useWindowSize';
 
+import BridgeChatActionsDialog from '../bridge/BridgeChatActionsDialog';
 import GroupChatInfo from '../common/GroupChatInfo';
 import Icon from '../common/icons/Icon';
 import PrivateChatInfo from '../common/PrivateChatInfo';
@@ -143,6 +145,13 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
   const shouldShowCloseButton = isTablet && isLeftColumnShown;
 
   const componentRef = useRef<HTMLDivElement>();
+
+  const [isBridgeActionsOpen, openBridgeActions, closeBridgeActions] = useFlag(false);
+
+  const handleBridgeLockClick = useLastCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    openBridgeActions();
+  });
 
   const handleOpenSearch = useLastCallback(() => {
     updateMiddleSearch({ chatId, threadId, update: {} });
@@ -322,6 +331,8 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
               name="lock"
               className="chat-bridge-lock"
               ariaLabel={langNew('BridgeChatEncrypted')}
+              role="button"
+              onClick={handleBridgeLockClick}
             />
           )}
         </div>
@@ -380,6 +391,13 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
           canExpandActions={!isAudioPlayerRendering}
         />
       </div>
+      {hasBridgeKey && (
+        <BridgeChatActionsDialog
+          isOpen={isBridgeActionsOpen}
+          chatId={chatId}
+          onClose={closeBridgeActions}
+        />
+      )}
     </div>
   );
 };

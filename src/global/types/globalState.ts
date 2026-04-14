@@ -117,7 +117,7 @@ export type BridgeState = {
   /** Chat IDs with an in-flight key exchange handshake — drives "waiting" UI state. */
   kxInProgressChatIds: Record<string, true>;
   /** TOFU status from the last contact-key store, keyed by contact (user) ID. Runtime-only. */
-  contactTofuStatusByContactId: Record<string, 'new' | 'changed' | 'unchanged'>;
+  contactTofuStatusByContactId: Record<string, 'new' | 'changed' | 'unchanged' | 'verified'>;
 };
 
 export type GlobalState = {

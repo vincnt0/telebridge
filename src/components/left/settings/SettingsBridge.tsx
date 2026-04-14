@@ -8,6 +8,7 @@ import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
+import ChangeBridgePasswordDialog from '../../bridge/ChangeBridgePasswordDialog';
 import SetupBridgeDialog from '../../bridge/SetupBridgeDialog';
 import UnlockBridgeDialog from '../../bridge/UnlockBridgeDialog';
 import Button from '../../ui/Button';
@@ -39,6 +40,7 @@ const SettingsBridge = ({
 
   const [isSetupOpen, openSetup, closeSetup] = useFlag(false);
   const [isUnlockOpen, openUnlock, closeUnlock] = useFlag(false);
+  const [isChangePasswordOpen, openChangePassword, closeChangePassword] = useFlag(false);
 
   useHistoryBack({
     isActive,
@@ -96,6 +98,11 @@ const SettingsBridge = ({
           </Button>
         )}
         {isInitialized && isUnlocked && (
+          <Button onClick={openChangePassword} disabled={isBusy}>
+            {lang('BridgeChangePasswordButton')}
+          </Button>
+        )}
+        {isInitialized && isUnlocked && (
           <Button color="danger" onClick={handleLock} isLoading={isBusy} disabled={isBusy}>
             {lang('BridgeLockButton')}
           </Button>
@@ -104,6 +111,7 @@ const SettingsBridge = ({
 
       <SetupBridgeDialog isOpen={isSetupOpen} onClose={closeSetup} />
       <UnlockBridgeDialog isOpen={isUnlockOpen} onClose={closeUnlock} />
+      <ChangeBridgePasswordDialog isOpen={isChangePasswordOpen} onClose={closeChangePassword} />
     </div>
   );
 };

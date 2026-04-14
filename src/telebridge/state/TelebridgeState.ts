@@ -504,6 +504,26 @@ export class TelebridgeState {
   }
 
   /**
+   * Drop a chat symmetric key. Future outgoing messages on this chat go in
+   * cleartext until a new key exchange runs. No-op if the chat has no key.
+   *
+   * @param chatId - Telegram chat ID
+   * @returns Updated serialized persisted state
+   */
+  async removeChatKey(chatId: string): Promise<string> {
+    this.assertUnlocked();
+
+    const existing = this.chatKeys.get(chatId);
+    if (existing) {
+      existing.key.fill(0);
+      this.chatKeys.delete(chatId);
+    }
+    delete this.persisted.chatKeys[chatId];
+
+    return serialize(this.persisted);
+  }
+
+  /**
    * Rotate a chat key: store new key, increment version, preserve previous.
    *
    * @param chatId - Telegram chat ID
