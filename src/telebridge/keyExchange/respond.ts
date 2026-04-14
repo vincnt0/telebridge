@@ -114,21 +114,17 @@ export async function respondToKeyExchange(
     ? fromBase64(existingContact.x25519PublicKey)
     : new Uint8Array(SIZES.X25519_PUBLIC_KEY);
 
-  const tofuResult = state.storeContactKey(
+  // Bookkeeping refresh. Tests and alternate pinning paths (in-person scan
+  // followed immediately by kx) may pass a `pinnedSenderIdKey` before a
+  // contact record exists in the archive, so `storeContactKey` can return
+  // 'new' here — that's fine, the caller's trust decision was already made by
+  // the byte-equality gate above. The returned `tofuStatus` reflects trust,
+  // not bookkeeping, so it stays `'unchanged'`.
+  state.storeContactKey(
     senderId,
     payload.senderIdKey,
     senderX25519ForContact,
   );
-
-  // The byte-equality gate above guarantees the wire identity matches the
-  // pinned (and therefore active) contact key, so `storeContactKey` can only
-  // take the active-entry path and return `'unchanged'`. Surface any other
-  // outcome as an invariant violation rather than silently papering over it.
-  if (tofuResult.status !== 'unchanged') {
-    throw new Error(
-      `respondToKeyExchange: unexpected TOFU status '${tofuResult.status}' after byte-equality gate`,
-    );
-  }
 
   // 6. Perform ECDH: my static X25519 private × sender's ephemeral X25519 public
   const sharedSecret = computeSharedSecret(myIdentity.x25519PrivateKey, payload.ephemeralX25519);

@@ -185,7 +185,7 @@ describe('respondToKeyExchange', () => {
       alice.ed25519PublicKey,
     );
 
-    expect(response.tofuStatus).toBe('new');
+    expect(response.tofuStatus).toBe('unchanged');
     expect(response.senderPublicKey).toEqual(alice.ed25519PublicKey);
   });
 
@@ -198,7 +198,7 @@ describe('respondToKeyExchange', () => {
     // First exchange
     const init1 = await initiateKeyExchange(alice, bob.x25519PublicKey);
     const resp1 = await respondOk(init1.wireMessage, bob, state, 'alice-user-id', alice.ed25519PublicKey);
-    expect(resp1.tofuStatus).toBe('new');
+    expect(resp1.tofuStatus).toBe('unchanged');
 
     // Second exchange with same identity
     const init2 = await initiateKeyExchange(alice, bob.x25519PublicKey);

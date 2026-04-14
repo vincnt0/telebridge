@@ -25,13 +25,13 @@ export interface KeyExchangeResponseOk {
   /** Sender's Ed25519 public key (identity) */
   senderPublicKey: Uint8Array;
   /**
-   * TOFU status on the `ok` branch is always `'unchanged'`: the strict
-   * byte-equality gate (see `respond.ts` step 3, race-to-pin fix in
-   * db101a508) requires the wire-embedded sender key to match the caller's
-   * pinned key before any derivation happens, which in turn means the
-   * subsequent `storeContactKey` hits the active-entry path. `'new'` and
-   * `'changed'` outcomes can only originate from other vault paths
-   * (prekey publication, in-person scan).
+   * TOFU status on the `ok` branch is always `'unchanged'` from a trust
+   * standpoint: the strict byte-equality gate (see `respond.ts` step 3,
+   * race-to-pin fix in db101a508) has already validated the wire-embedded
+   * sender key against the caller's pinned reference, so no trust transition
+   * happens here. The underlying archive bookkeeping may still take the
+   * 'new' path (e.g. in-person scan landed the pinned key before a contact
+   * record existed), but that's orthogonal to the kx trust decision.
    */
   tofuStatus: 'unchanged';
 }

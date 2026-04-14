@@ -49,7 +49,7 @@ describe('TelebridgeState', () => {
 
       // Persisted state should be valid JSON
       const persisted = deserialize(serialized);
-      expect(persisted.formatVersion).toBe(1);
+      expect(persisted.formatVersion).toBe(2);
       expect(persisted.passwordSalt).toBeTruthy();
       expect(persisted.passwordVerifier).toBeTruthy();
       expect(persisted.identity).toBeDefined();
