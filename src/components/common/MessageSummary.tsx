@@ -68,11 +68,15 @@ function MessageSummary({
   const lang = useLang();
 
   // Telebridge: machine messages (kx/pk handshake wire payloads) must never
-  // surface in previews. Render an empty span — same fallback used for
-  // messages with no text content.
+  // surface in previews as raw ciphertext. Substitute a friendly label so
+  // chat-list previews read "Encryption setup" / "Key exchange" instead of
+  // blank or base64 noise.
   const rawText = message.content.text?.text;
   if (rawText && isTelebridgeMachineMessage(rawText)) {
-    return <span />;
+    const labelKey = rawText.startsWith('tb1.pk.')
+      ? 'BridgePreviewPrekey'
+      : 'BridgePreviewKeyExchange';
+    return <span>{lang(labelKey)}</span>;
   }
 
   const extractedText = extractMessageText(message, inChatList);
