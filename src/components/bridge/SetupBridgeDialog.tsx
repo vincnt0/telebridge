@@ -14,8 +14,6 @@ import Modal from '../ui/Modal';
 
 import styles from './BridgeDialog.module.scss';
 
-const BRIDGE_MIN_PASSWORD_LENGTH = 8;
-
 type OwnProps = {
   isOpen: boolean;
   onClose: NoneToVoidFunction;
@@ -82,10 +80,6 @@ const SetupBridgeDialog = ({
     e.preventDefault();
     if (isBusy) return;
 
-    if (password.length < BRIDGE_MIN_PASSWORD_LENGTH) {
-      setLocalError(lang('BridgePasswordTooShort'));
-      return;
-    }
     if (password !== confirmPassword) {
       setLocalError(lang('BridgePasswordMismatch'));
       return;
