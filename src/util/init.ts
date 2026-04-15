@@ -44,6 +44,34 @@ export async function initGlobal(force: boolean = false, prevGlobal?: GlobalStat
     }
   }
 
+  // Telebridge: rehydrate the singleton vault from the persisted blob BEFORE
+  // setGlobal so the reactive bridge slice agrees with runtime vault state on
+  // the very first render. Two slices must stay in sync:
+  //   - `isInitialized`: the cached flag can get out of step with the vault
+  //     (e.g. blob was cleared from disk while the cached flag persisted, or
+  //     deserialize throws on a corrupt blob). If the vault can't load, flip
+  //     `isInitialized` back to false so the UI shows Setup, not Unlock.
+  //   - `hasPassword`: used by the unlock dialog's auto-unlock path. The cached
+  //     value can be stale (legacy blobs predate the flag); source of truth is
+  //     the vault after load().
+  const vault = getTelebridgeVault();
+  if (global.bridge.persistedJson) {
+    try {
+      vault.load(global.bridge.persistedJson);
+    } catch {
+      // Corrupt blob — leave vault uninitialized and drop the blob from global
+      // so the cache reducer doesn't re-persist it next cycle.
+    }
+  }
+  global.bridge = {
+    ...global.bridge,
+    isInitialized: vault.isInitialized(),
+    hasPassword: vault.isInitialized() ? vault.hasPassword() : false,
+    // Drop the blob on load failure so a corrupt/stale cache entry doesn't
+    // re-persist on the next cache-save cycle. Fresh setup will repopulate it.
+    persistedJson: vault.isInitialized() ? global.bridge.persistedJson : undefined,
+  };
+
   setGlobal(global);
 
   // Telebridge: rebuild the media-hash → chatId registry from cache-restored
@@ -55,19 +83,4 @@ export async function initGlobal(force: boolean = false, prevGlobal?: GlobalStat
       if (hashes.length) registerMediaChats(hashes, chatId);
     });
   });
-
-  // Telebridge: rehydrate the singleton vault from the persisted blob so
-  // `isInitialized` on the global slice and the vault agree at boot time.
-  // The vault stays locked — unlock() runs from the UI once the user types
-  // their password. A corrupt blob is treated as no vault (state remains
-  // `isInitialized: false` from the cached slice, which should match).
-  if (global.bridge.persistedJson) {
-    try {
-      getTelebridgeVault().load(global.bridge.persistedJson);
-    } catch {
-      // Corrupt blob — leave vault uninitialized, the user will have to
-      // re-run setup. We deliberately don't surface this: it's a local
-      // disk-corruption case that shouldn't happen in normal operation.
-    }
-  }
 }
