@@ -259,6 +259,11 @@ export function ensureKxProcessed(message: ApiMessage): void {
  * sign envelopes under an unverified identity and walk right through the
  * GCM gate. This mirrors finding #2 from the 2026-04-14 code review.
  *
+ * Own outgoing envelopes: self is not a contact, so the signer public key is
+ * resolved from the vault's own identity instead. GCM still arbitrates — the
+ * encrypt-to-recipient sibling fails and is filtered out just like on the
+ * recipient side.
+ *
  * Deduped by `asymmetricProcessed`. Locked vault leaves the key unmarked so
  * the unlock backfill retries.
  */
@@ -277,10 +282,16 @@ export function ensureAsymmetricProcessed(
   if (!vault.isInitialized() || vault.isLocked()) return;
   if (!senderId) return;
 
-  // No pinned contact key → refuse (code-review finding #2: don't TOFU-accept
-  // per-message envelopes from unknown senders).
-  const contact = vault.getContactKey(senderId);
-  if (!contact) {
+  // Own outgoing envelopes: the encrypt-to-self sibling of every Send Secured
+  // lands back in our own chat view. Users don't have a self contact record
+  // (self is not a contact), so the contact-key path below would reject it and
+  // leave the red warn glyph on our own plaintext. Resolve the signer to our
+  // own Ed25519 identity pubkey instead; GCM against our X25519 key already
+  // arbitrates which sibling we can open. The encrypt-to-recipient sibling
+  // fails GCM → notForMe → hidden, exactly as on the recipient side.
+  const isSelfSender = senderId === getGlobal().currentUserId;
+  const contact = isSelfSender ? undefined : vault.getContactKey(senderId);
+  if (!isSelfSender && !contact) {
     asymmetricProcessed.add(messageKey);
     // Surface as invalidSignature via the existing MessageMeta warning slot —
     // the MessageMeta `isTelebridgeFailed` check already fires on any tb1
@@ -302,7 +313,9 @@ export function ensureAsymmetricProcessed(
   void (async () => {
     try {
       const identity = vault.getIdentityKeyPair();
-      const senderEd25519 = fromBase64(contact.ed25519PublicKey);
+      const senderEd25519 = isSelfSender
+        ? identity.ed25519PublicKey
+        : fromBase64(contact!.ed25519PublicKey);
       const result = await decryptEnvelopeToText(
         payload,
         identity.x25519PrivateKey,
@@ -322,8 +335,11 @@ export function ensureAsymmetricProcessed(
 
       // GCM + signature OK. Track separately so Golf can apply
       // Send-Secured-specific styling; also stamp lastUsed since we just
-      // verified the sender's signature against the pinned key.
-      vault.bumpContactKeyLastUsed(senderId);
+      // verified the sender's signature against the pinned key. Self-sender
+      // has no contact record, so skip the bump in that branch.
+      if (!isSelfSender) {
+        vault.bumpContactKeyLastUsed(senderId);
+      }
       getActions().bridgeSetDecryptedText({ messageKey, text: result.text });
       getActions().bridgeMarkAsymmetricDecrypted({ messageKey });
     } finally {
