@@ -132,6 +132,7 @@ import buildStyle from '../../../util/buildStyle';
 import { isUserId } from '../../../util/entities/ids';
 import { getMessageKey } from '../../../util/keys/messageKey';
 import { isTelebridgeMessage } from '../../../telebridge/protocol';
+import { canDecryptNow, ensureDecryptedText } from '../../../telebridge/receive';
 import { getServerTime } from '../../../util/serverTime';
 import stopEvent from '../../../util/stopEvent';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
@@ -1074,8 +1075,16 @@ const Message = ({
   function renderMessageText(isForAnimation?: boolean) {
     if (!textMessage) return undefined;
 
+    // Telebridge: swap the ciphertext bubble text for cached plaintext when a
+    // decrypt has landed. Entities dropped — offsets refer to plaintext the
+    // ciphertext no longer matches. Lower priority than summary/translation
+    // overrides so those UI states take precedence.
+    const bridgeForcedText = bridgeDecryptedText
+      ? { text: bridgeDecryptedText, entities: undefined }
+      : undefined;
     const forcedText = (isShowingSummary && summary?.text)
-      || (requestedTranslationLanguage ? currentTranslatedText : undefined);
+      || (requestedTranslationLanguage ? currentTranslatedText : undefined)
+      || bridgeForcedText;
     return (
       <MessageText
         messageOrStory={textMessage}
@@ -1141,6 +1150,15 @@ const Message = ({
   const isTelebridgeFailed = Boolean(
     rawMessageText && rawMessageText.startsWith('tb1.') && !isTelebridgeDecrypted,
   );
+
+  // Bubble-level decrypt kick-off. Chat-list summaries only render the latest
+  // message per chat, so older messages in the open thread need the bubble to
+  // prime the cache. Idempotent — ensureDecryptedText dedupes via inflight +
+  // cached checks, so calling on every render is cheap.
+  if (isTelebridgePayload && !bridgeDecryptedText && rawMessageText
+    && canDecryptNow(message.chatId, rawMessageText)) {
+    ensureDecryptedText(message.chatId, getMessageKey(message), rawMessageText, message.senderId);
+  }
 
   function renderReactionsAndMeta() {
     const meta = (
