@@ -16,3 +16,33 @@
   color: var(--color-error);
   font-size: 0.875rem;
 }
+
+.optionalNote {
+  margin: -0.5rem 0 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.skipButton {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--color-primary);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}

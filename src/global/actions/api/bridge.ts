@@ -114,6 +114,7 @@ addActionHandler('bridgeSetPassword', async (global, actions, payload): Promise<
         ...global.bridge,
         isInitialized: true,
         isUnlocked: true,
+        hasPassword: vault.hasPassword(),
         persistedJson,
         chatKeyIds: {},
         decryptedByKey: {},
@@ -166,6 +167,7 @@ addActionHandler('bridgeUnlock', async (global, actions, payload): Promise<void>
       bridge: {
         ...global.bridge,
         isUnlocked: true,
+        hasPassword: vault.hasPassword(),
         chatKeyIds,
         contactKeyIds,
         contactTofuStatusByContactId,
@@ -237,6 +239,7 @@ addActionHandler('bridgeChangePassword', async (global, actions, payload): Promi
       bridge: {
         ...global.bridge,
         persistedJson,
+        hasPassword: vault.hasPassword(),
         isBusy: false,
         lastError: undefined,
       },
@@ -244,6 +247,21 @@ addActionHandler('bridgeChangePassword', async (global, actions, payload): Promi
   } catch (err) {
     setGlobal(setError(getGlobal(), err));
   }
+});
+
+addActionHandler('bridgeHydrateFromVault', (global): ActionReturnType => {
+  // Pull non-secret vault metadata into the reactive bridge slice. Used on
+  // boot by the unlock dialog so it can decide between auto-unlock (empty
+  // password) and prompting — `init.ts` loads the vault blob, but only the
+  // vault knows whether a real password is set.
+  const vault = getTelebridgeVault();
+  if (!vault.isInitialized()) return undefined;
+  const hasPassword = vault.hasPassword();
+  if (global.bridge.hasPassword === hasPassword) return undefined;
+  return {
+    ...global,
+    bridge: { ...global.bridge, hasPassword },
+  };
 });
 
 addActionHandler('bridgeStoreChatKey', async (global, actions, payload): Promise<void> => {

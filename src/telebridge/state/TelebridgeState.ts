@@ -182,6 +182,7 @@ export class TelebridgeState {
       argon2Params: { ...INIT_ARGON2_PARAMS },
       passwordSalt: toBase64(salt),
       passwordVerifier: encodeEncryptedPayload(encryptedVerifier),
+      hasPassword: password.length > 0,
       identity: {
         ed25519PublicKey: toBase64(ed25519Keypair.publicKey),
         x25519PublicKey: toBase64(x25519Keypair.publicKey),
@@ -214,6 +215,13 @@ export class TelebridgeState {
    */
   load(json: string): void {
     this.persisted = deserialize(json);
+    // Legacy migration: blobs written before the optional-password flag shipped
+    // have no hasPassword field. Presence of a salt means a password was set
+    // at initialize time (empty-password KEK is a post-flag feature), so treat
+    // as hasPassword: true.
+    if (this.persisted.hasPassword === undefined) {
+      this.persisted.hasPassword = Boolean(this.persisted.passwordSalt);
+    }
     this.initialized = true;
     // Remain locked — derivedKey and plaintext keys are not populated
     this.derivedKey = undefined;
@@ -417,12 +425,26 @@ export class TelebridgeState {
     // Update persisted state
     this.persisted.passwordSalt = toBase64(newSalt);
     this.persisted.passwordVerifier = encodeEncryptedPayload(encryptedVerifier);
+    this.persisted.hasPassword = newPassword.length > 0;
 
     // Wipe old derived key, set new one
     secureWipe(this.derivedKey!);
     this.derivedKey = newDerivedKey;
 
     return serialize(this.persisted);
+  }
+
+  /**
+   * Whether the vault is protected by a non-empty password. Defaults false when
+   * not initialized. Legacy blobs without the flag but with a salt are treated
+   * as true (the empty-password feature is newer than the salt field).
+   */
+  hasPassword(): boolean {
+    if (!this.initialized) return false;
+    if (this.persisted.hasPassword === undefined) {
+      return Boolean(this.persisted.passwordSalt);
+    }
+    return this.persisted.hasPassword;
   }
 
   // ---------------------------------------------------------------------------

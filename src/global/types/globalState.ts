@@ -97,6 +97,12 @@ import type { TabState } from './tabState';
 export type BridgeState = {
   isInitialized: boolean;
   isUnlocked: boolean;
+  /**
+   * Whether the vault is protected by a non-empty password. Mirrors
+   * TelebridgeState.hasPassword(). Drives the UI path that skips unlock for
+   * no-password vaults and hides the current-password field on change.
+   */
+  hasPassword?: boolean;
   persistedJson?: string;
   chatKeyIds: Record<string, true>;
   /**

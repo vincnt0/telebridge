@@ -21,12 +21,14 @@ type OwnProps = {
 
 type StateProps = {
   isBusy: boolean;
+  hasPassword: boolean;
   lastError?: string;
 };
 
 const ChangeBridgePasswordDialog = ({
   isOpen,
   isBusy,
+  hasPassword,
   lastError,
   onClose,
 }: OwnProps & StateProps) => {
@@ -83,10 +85,26 @@ const ChangeBridgePasswordDialog = ({
     e.preventDefault();
     if (isBusy) return;
 
-    if (!currentPassword) {
+    // Require current password only if the vault has one. No-password vaults
+    // pass the empty string through; the vault's empty-string KEK matches.
+    if (hasPassword && !currentPassword) {
       setLocalError(lang('BridgeWrongPassword'));
       return;
     }
+
+    // Empty new password = removing the password. Skip the same-as-current
+    // and mismatch checks; confirm must also be empty, which the submit
+    // button keeps possible.
+    if (!newPassword) {
+      if (confirmPassword) {
+        setLocalError(lang('BridgePasswordMismatch'));
+        return;
+      }
+      setHasSubmitted(true);
+      bridgeChangePassword({ currentPassword, newPassword: '' });
+      return;
+    }
+
     if (newPassword === currentPassword) {
       setLocalError(lang('BridgeSamePassword'));
       return;
@@ -116,19 +134,22 @@ const ChangeBridgePasswordDialog = ({
     >
       <form action="" onSubmit={handleSubmit} autoComplete="off">
         <p className={styles.description}>{lang('BridgeChangePasswordDialogText')}</p>
-        <div className={buildClassName('input-group', currentPassword && 'touched', displayedError && 'error')}>
-          <input
-            className="form-control"
-            type="password"
-            value={currentPassword}
-            onChange={handleCurrentChange}
-            autoComplete="current-password"
-            maxLength={256}
-            disabled={isBusy}
-            dir="auto"
-          />
-          <label>{lang('BridgeCurrentPasswordLabel')}</label>
-        </div>
+        <p className={styles.optionalNote}>{lang('BridgePasswordOptionalNote')}</p>
+        {hasPassword && (
+          <div className={buildClassName('input-group', currentPassword && 'touched', displayedError && 'error')}>
+            <input
+              className="form-control"
+              type="password"
+              value={currentPassword}
+              onChange={handleCurrentChange}
+              autoComplete="current-password"
+              maxLength={256}
+              disabled={isBusy}
+              dir="auto"
+            />
+            <label>{lang('BridgeCurrentPasswordLabel')}</label>
+          </div>
+        )}
         <div className={buildClassName('input-group', newPassword && 'touched', displayedError && 'error')}>
           <input
             className="form-control"
@@ -167,6 +188,7 @@ const ChangeBridgePasswordDialog = ({
 export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => ({
     isBusy: Boolean(global.bridge.isBusy),
+    hasPassword: Boolean(global.bridge.hasPassword),
     lastError: global.bridge.lastError,
   }),
 )(ChangeBridgePasswordDialog));

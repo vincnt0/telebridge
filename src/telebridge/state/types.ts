@@ -112,6 +112,14 @@ export interface PersistedState {
   passwordSalt: string;
   /** Encrypted verifier blob for password validation (base64 of AES-GCM encrypted payload) */
   passwordVerifier: string;
+  /**
+   * Whether the user set a non-empty password at initialize/changePassword
+   * time. When false, the vault is encrypted with an empty-string KEK — still
+   * a valid Argon2id derivation, but offers no secrecy at rest. Drives the
+   * UI skip-unlock behaviour. Optional for legacy blobs; load() treats any
+   * legacy state with a salt as hasPassword: true.
+   */
+  hasPassword?: boolean;
   /** Identity keys (public + encrypted private) */
   identity?: IdentityKeys;
   /** Per-chat encrypted keys */

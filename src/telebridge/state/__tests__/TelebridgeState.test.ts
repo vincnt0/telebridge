@@ -584,6 +584,106 @@ describe('TelebridgeState', () => {
       expect(info!.rotationVersion).toBe(1);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Optional Password (empty-string KEK)
+  // ---------------------------------------------------------------------------
+
+  describe('optional password', () => {
+    it('initialize with empty password sets hasPassword = false', async () => {
+      const state = new TelebridgeState();
+      const serialized = await state.initialize('');
+
+      expect(state.hasPassword()).toBe(false);
+
+      const persisted = deserialize(serialized);
+      expect(persisted.hasPassword).toBe(false);
+      // Salt + verifier still generated — the KEK derivation runs normally
+      expect(persisted.passwordSalt).toBeTruthy();
+      expect(persisted.passwordVerifier).toBeTruthy();
+    });
+
+    it('initialize with non-empty password sets hasPassword = true', async () => {
+      const state = new TelebridgeState();
+      const serialized = await state.initialize(TEST_PASSWORD);
+
+      expect(state.hasPassword()).toBe(true);
+
+      const persisted = deserialize(serialized);
+      expect(persisted.hasPassword).toBe(true);
+    });
+
+    it('unlock with empty password succeeds on a no-password vault', async () => {
+      const state = new TelebridgeState();
+      const serialized = await state.initialize('');
+      state.lock();
+
+      // Reload a fresh instance to exercise the full unlock path
+      const reloaded = new TelebridgeState();
+      reloaded.load(serialized);
+      expect(reloaded.isLocked()).toBe(true);
+      expect(reloaded.hasPassword()).toBe(false);
+
+      await reloaded.unlock('');
+      expect(reloaded.isLocked()).toBe(false);
+      expect(reloaded.getIdentityKeyPair()).toBeDefined();
+    });
+
+    it('changePassword empty → non-empty flips hasPassword to true', async () => {
+      const state = new TelebridgeState();
+      await state.initialize('');
+      expect(state.hasPassword()).toBe(false);
+
+      const serialized = await state.changePassword('', TEST_PASSWORD);
+      expect(state.hasPassword()).toBe(true);
+
+      const persisted = deserialize(serialized);
+      expect(persisted.hasPassword).toBe(true);
+
+      // New password actually works
+      state.lock();
+      await state.unlock(TEST_PASSWORD);
+      expect(state.isLocked()).toBe(false);
+    });
+
+    it('changePassword non-empty → empty flips hasPassword to false', async () => {
+      const state = new TelebridgeState();
+      await state.initialize(TEST_PASSWORD);
+      expect(state.hasPassword()).toBe(true);
+
+      const serialized = await state.changePassword(TEST_PASSWORD, '');
+      expect(state.hasPassword()).toBe(false);
+
+      const persisted = deserialize(serialized);
+      expect(persisted.hasPassword).toBe(false);
+
+      // Empty password actually unlocks
+      state.lock();
+      await state.unlock('');
+      expect(state.isLocked()).toBe(false);
+    });
+
+    it('legacy persisted state without hasPassword defaults to true when salt exists', async () => {
+      // Simulate a pre-flag blob: initialize, then strip the flag from the JSON.
+      const state = new TelebridgeState();
+      const serialized = await state.initialize(TEST_PASSWORD);
+      const parsed = JSON.parse(serialized);
+      delete parsed.hasPassword;
+      expect(parsed.hasPassword).toBeUndefined();
+      const legacyJson = JSON.stringify(parsed);
+
+      const reloaded = new TelebridgeState();
+      reloaded.load(legacyJson);
+
+      // Migration infers hasPassword: true because a salt is present
+      expect(reloaded.hasPassword()).toBe(true);
+    });
+
+    it('hasPassword() returns false on a fresh uninitialized state', () => {
+      const state = new TelebridgeState();
+      expect(state.hasPassword()).toBe(false);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -80,6 +80,15 @@ const SetupBridgeDialog = ({
     e.preventDefault();
     if (isBusy) return;
 
+    // Empty password path: confirm must also be empty (trivially matches).
+    // Short-circuit the mismatch check so the user gets a clean no-password
+    // vault without a confusing "Passwords don't match" error.
+    if (!password && !confirmPassword) {
+      setHasSubmitted(true);
+      bridgeSetPassword({ password: '' });
+      return;
+    }
+
     if (password !== confirmPassword) {
       setLocalError(lang('BridgePasswordMismatch'));
       return;
@@ -87,6 +96,15 @@ const SetupBridgeDialog = ({
 
     setHasSubmitted(true);
     bridgeSetPassword({ password });
+  });
+
+  const handleSkip = useLastCallback(() => {
+    if (isBusy) return;
+    setPassword('');
+    setConfirmPassword('');
+    setLocalError(undefined);
+    setHasSubmitted(true);
+    bridgeSetPassword({ password: '' });
   });
 
   const displayedError = localError ?? lastError;
@@ -101,6 +119,7 @@ const SetupBridgeDialog = ({
     >
       <form action="" onSubmit={handleSubmit} autoComplete="off">
         <p className={styles.description}>{lang('BridgeSetupDialogText')}</p>
+        <p className={styles.optionalNote}>{lang('BridgePasswordOptionalNote')}</p>
         <div className={buildClassName('input-group', password && 'touched', displayedError && 'error')}>
           <input
             className="form-control"
@@ -131,6 +150,14 @@ const SetupBridgeDialog = ({
         <Button type="submit" isLoading={isBusy} disabled={isBusy}>
           {lang('BridgeSubmitSetup')}
         </Button>
+        <button
+          type="button"
+          className={styles.skipButton}
+          onClick={handleSkip}
+          disabled={isBusy}
+        >
+          {lang('BridgeSkipPasswordButton')}
+        </button>
       </form>
     </Modal>
   );

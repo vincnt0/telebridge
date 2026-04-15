@@ -348,6 +348,7 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
   bridge: {
     isInitialized: false,
     isUnlocked: false,
+    hasPassword: false,
     isDebugMode: false,
     chatKeyIds: {},
     decryptedByKey: {},

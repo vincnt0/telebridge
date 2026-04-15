@@ -3136,6 +3136,7 @@ export interface ActionPayloads {
     currentPassword: string;
     newPassword: string;
   };
+  bridgeHydrateFromVault: undefined;
   bridgeStoreChatKey: {
     chatId: string;
     key: Uint8Array;
