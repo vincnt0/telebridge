@@ -1,0 +1,105 @@
+// Telebridge branded title — RGB-split glitch treatment reusable outside
+// the auth screen. Keyframes mirror the auth-screen title glitch so the
+// motion reads as the same brand across surfaces. The class form lets
+// feature screens (Settings → Bridge, etc.) opt in without coupling to
+// auth form ids.
+
+.bridgeGlitchTitle {
+  position: relative;
+
+  display: inline-block;
+
+  color: var(--color-text);
+
+  &[data-text]::before,
+  &[data-text]::after {
+    content: attr(data-text);
+
+    position: absolute;
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    pointer-events: none;
+  }
+
+  &[data-text]::before {
+    color: rgba(255, 40, 80, 0.9);
+    transform: translate(-0.0625rem, 0);
+
+    animation: telebridge-title-glitch-red 3.2s infinite steps(1);
+
+    clip-path: inset(0 0 60% 0);
+  }
+
+  &[data-text]::after {
+    color: rgba(40, 220, 255, 0.9);
+    transform: translate(0.0625rem, 0);
+
+    animation: telebridge-title-glitch-cyan 3.2s infinite steps(1);
+    animation-delay: -1.6s;
+
+    clip-path: inset(60% 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bridgeGlitchTitle[data-text]::before,
+  .bridgeGlitchTitle[data-text]::after {
+    animation: none;
+  }
+}
+
+// Keyframes duplicated from Auth.scss so the title glitch renders on
+// surfaces where Auth.scss isn't loaded (e.g. already-signed-in Settings).
+// Identical to auth-side definitions — CSS name-collision is a harmless
+// no-op as long as the motion matches.
+@keyframes telebridge-title-glitch-red {
+  0% {
+    clip-path: inset(0 0 72% 0);
+    transform: translate(-0.125rem, 0);
+  }
+  28% {
+    clip-path: inset(40% 0 36% 0);
+    transform: translate(0.0625rem, 0);
+  }
+  52% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0);
+  }
+  76% {
+    clip-path: inset(66% 0 12% 0);
+    transform: translate(-0.1875rem, 0);
+  }
+  100% {
+    clip-path: inset(0 0 72% 0);
+    transform: translate(-0.125rem, 0);
+  }
+}
+
+@keyframes telebridge-title-glitch-cyan {
+  0% {
+    clip-path: inset(62% 0 20% 0);
+    transform: translate(0.125rem, 0);
+  }
+  28% {
+    clip-path: inset(16% 0 70% 0);
+    transform: translate(-0.0625rem, 0);
+  }
+  52% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0);
+  }
+  76% {
+    clip-path: inset(40% 0 44% 0);
+    transform: translate(0.1875rem, 0);
+  }
+  100% {
+    clip-path: inset(62% 0 20% 0);
+    transform: translate(0.125rem, 0);
+  }
+}

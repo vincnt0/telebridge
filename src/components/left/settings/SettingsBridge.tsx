@@ -74,7 +74,9 @@ const SettingsBridge = ({
   return (
     <div className="settings-content custom-scroll">
       <div className={styles.header}>
-        <h3 className={styles.title}>{lang('BridgeTitle')}</h3>
+        <h1 className={buildClassName(styles.title, 'bridgeGlitchTitle')} data-text={lang('BridgeTitle')}>
+          {lang('BridgeTitle')}
+        </h1>
         <p className={styles.description}>{lang('BridgeInfoDescription')}</p>
       </div>
 
